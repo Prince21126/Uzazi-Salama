@@ -5,10 +5,13 @@ export interface Patient {
   id: string;
   name: string;
   phone: string;
+  weight: number;
   lastPeriodDate: string; // ISO string
   dueDate: string; // ISO string
   weeksPregnant: number;
   assignedHospitalId: string;
+  language?: Language;
+  isAdmin?: boolean;
 }
 
 export interface CheckupLog {
@@ -27,6 +30,7 @@ export interface Hospital {
   id: string;
   name: string;
   location: string;
+  phone: string;
   emergencyContact: string;
 }
 

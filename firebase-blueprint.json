@@ -1,0 +1,48 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Patient or Admin profile information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "weight": { "type": "number" },
+        "lastPeriodDate": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "weeksPregnant": { "type": "number" },
+        "assignedHospitalId": { "type": "string" },
+        "language": { "type": "string", "enum": ["fr", "en", "sw"] },
+        "isAdmin": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "language"]
+    },
+    "CheckupLog": {
+      "title": "Health Checkup Log",
+      "description": "Daily symptoms and AI analysis results",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "symptoms": { "type": "array" },
+        "healthScore": { "type": "number" },
+        "aiAnalysis": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["date", "symptoms", "healthScore"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Stores user profiles"
+    },
+    "/users/{userId}/logs/{logId}": {
+      "schema": "CheckupLog",
+      "description": "Stores daily health logs for each user"
+    }
+  }
+}

@@ -5,34 +5,97 @@
 
 import { useState, useEffect } from 'react';
 import { 
-  Home, 
-  Stethoscope, 
-  BookOpen, 
-  User, 
+  Heart, 
+  Plus, 
   Baby, 
-  Calendar, 
-  AlertCircle, 
+  User, 
+  BookOpen, 
+  Settings, 
   ChevronRight, 
+  ArrowRight, 
+  CheckCircle2, 
+  AlertCircle, 
+  MapPin, 
+  Phone, 
+  Calendar, 
+  Stethoscope, 
+  TrendingUp, 
+  ShieldCheck, 
+  History, 
+  Languages, 
+  ChevronDown, 
+  Loader2, 
+  Activity, 
+  Clock, 
+  Quote, 
+  Sparkles,
   ArrowLeft,
-  ChevronDown,
-  Bell,
-  Heart,
+  Home,
+  RefreshCw,
   Droplets,
-  Plus,
   QrCode,
   LogOut,
-  MapPin,
-  Phone,
-  Languages,
-  ShieldCheck,
   BrainCircuit,
-  Loader2
+  Bell
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { QRCodeCanvas } from 'qrcode.react';
-import { Patient, HealthStatus, CheckupLog, Language } from './types';
+import { Patient, HealthStatus, CheckupLog, Language, Hospital } from './types';
 import { HOSPITALS, EDUCATION_ARTICLES } from './constants';
 import { analyzeSymptoms } from './services/aiService';
+import { db, auth } from './lib/firebase';
+import { useAuth } from './hooks/useAuth';
+import { 
+  doc, 
+  getDoc, 
+  setDoc, 
+  updateDoc, 
+  collection, 
+  onSnapshot, 
+  query, 
+  orderBy, 
+  addDoc, 
+  serverTimestamp,
+  where,
+  getDocs
+} from 'firebase/firestore';
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: 'create' | 'update' | 'delete' | 'list' | 'get' | 'write';
+  path: string | null;
+  authInfo: {
+    userId: string;
+    email: string;
+    emailVerified: boolean;
+    isAnonymous: boolean;
+    providerInfo: { providerId: string; displayName: string; email: string; }[];
+  }
+}
+
+function handleFirestoreError(error: any, operationType: FirestoreErrorInfo['operationType'], path: string | null = null) {
+  if (error.code === 'permission-denied') {
+    const user = auth.currentUser;
+    const errorInfo: FirestoreErrorInfo = {
+      error: error.message,
+      operationType,
+      path,
+      authInfo: {
+        userId: user?.uid || 'anonymous',
+        email: user?.email || 'none',
+        emailVerified: user?.emailVerified || false,
+        isAnonymous: user?.isAnonymous || false,
+        providerInfo: user?.providerData.map(p => ({
+          providerId: p.providerId,
+          displayName: p.displayName || '',
+          email: p.email || ''
+        })) || []
+      }
+    };
+    throw new Error(JSON.stringify(errorInfo));
+  }
+  throw error;
+}
 
 // --- Translations ---
 const translations = {
@@ -43,6 +106,7 @@ const translations = {
     profil: "Moi",
     welcome: "Bonjour",
     journey: "Ma grossesse",
+    journey_label: "Votre parcours",
     weeks: "Semaines",
     remaining: "Encore",
     diagnostic_ia: "Vérifier ma santé",
@@ -75,6 +139,16 @@ const translations = {
     hygiene: "Propreté",
     mental_health: "Moral",
     trimester: "Trimestre",
+    emergency: "Urgence",
+    call_hospital: "Appeler l'hôpital",
+    kick_counter: "Compteur de coups",
+    contractions: "Contractions",
+    start_counting: "Démarrer le comptage",
+    stop_counting: "Arrêter",
+    kicks_today: "Coups aujourd'hui",
+    weight_track: "Suivi de poids",
+    bp_track: "Tension",
+    tools: "Outils",
     medical_record: "Historique",
     medical_history: "Historique Médical",
     back: "Retour",
@@ -82,10 +156,70 @@ const translations = {
     stable: "Stable",
     vigilance: "Vigilance",
     action: "Action",
+    show_qr: "Afficher QR",
+    refresh_tips: "Nouveau conseil",
+    active_followup: "Suivi Actif",
+    risk: "Risque",
+    normal: "Normal",
+    emergency_contact: "Urgence",
+    direct_line: "Ligne Directe",
+    generated_by: "Généré par UZAZI SALAMA AI",
+    soon: "Bientôt",
+    current_health: "Ma santé actuelle",
+    last_checkup: "Dernier bilan",
+    days: "jours",
+    days_left: "JOURS RESTANTS",
+    medical_file: "Fiche médicale",
+    see_details: "Voir détails",
+    vital_signs: "Signes Vitaux",
+    check_now: "Vérifier ma santé",
+    note_label: "Note pour le docteur",
+    note_placeholder: "Expliquez comment vous vous sentez...",
+    tracking_details: "Détails du Suivi",
+    assigned_hospital: "Hôpital Assigné",
+    assigned_hospital_desc: "Votre centre de référence",
+    emergency_desc: "Disponible 24h/24",
+    weight_desc: "Dernier poids enregistré",
+    bp_desc: "Dernière tension mesurée",
+    hospital_label: "Hôpital",
+    french: "FRANÇAIS",
+    swahili: "SWAHILI",
+    mashi: "MASHI",
+    dpa_label: "DPA",
+    id_label: "ID",
+    full_name: "Votre Nom Complet",
+    full_name_placeholder: "Ex: Zawadi Zawadi",
+    phone_label: "Téléphone (Airtel/Orange)",
+    lmp_date: "Date des Dernières Règles",
+    medical_center: "Votre Centre Médical",
+    start_tracking: "Lancer mon Suivi",
+    continue: "Continuer",
+    app_subtitle: "Votre partenaire intelligent pour une maternité en toute sécurité.",
+    medical_record_title: "Ma fiche santé",
+    followup_active: "Suivi Actif",
     all_normal: "Tout semble normal pour votre stade actuel.",
     start_checkup: "Commencez un bilan",
     no_logs: "Aucun bilan enregistré",
-    patient_notes: "Notes patiente:"
+    patient_notes: "Notes patiente:",
+    google_login: "Continuer avec Google",
+    or: "OU",
+    app_tagline: "Maman & Bébé",
+    generate_ai_advice: "Nouveau conseil IA (OMS)",
+    generating: "Génération...",
+    fresh_advice: "Conseil du Moment",
+    who_label: "Conforme OMS",
+    admin_title: "Tableau de Bord Admin",
+    stats_overview: "Aperçu Global",
+    hospitals_management: "Gestion des Hôpitaux",
+    emergencies_management: "Numéros d'Urgence",
+    all_patients: "Toutes les Mamans",
+    predict_labor: "Prédiction Accouchement",
+    labor_prediction_desc: "Basé sur les contractions et antécédents",
+    admin_access_code: "Code d'accès Admin",
+    admin_auth: "Authentification Admin",
+    access_granted: "Accès Autorisé",
+    reports: "Rapports",
+    total_women: "Total Femmes",
   },
   SW: {
     home: "Maendeleo",
@@ -94,6 +228,7 @@ const translations = {
     profil: "Mimi",
     welcome: "Habari",
     journey: "Mimba yangu",
+    journey_label: "Safari yako",
     weeks: "Wiki",
     remaining: "Imebaki",
     diagnostic_ia: "Angalia afya",
@@ -126,6 +261,16 @@ const translations = {
     hygiene: "Usafi",
     mental_health: "Moyo",
     trimester: "Miezi 3",
+    emergency: "Dharura",
+    call_hospital: "Piga simu hospitali",
+    kick_counter: "Hesabu mateke",
+    contractions: "Uchungu",
+    start_counting: "Anza kuhesabu",
+    stop_counting: "Acha",
+    kicks_today: "Mateke ya leo",
+    weight_track: "Uzito",
+    bp_track: "Presha",
+    tools: "Vifaa",
     medical_record: "Historia",
     medical_history: "Historia ya Matibabu",
     back: "Rudi",
@@ -133,10 +278,70 @@ const translations = {
     stable: "Salama",
     vigilance: "Tahadhari",
     action: "Chukua hatua",
+    show_qr: "Onyesha QR",
+    refresh_tips: "Ushauri mwingine",
+    active_followup: "Ufuatiliaji Unaoendelea",
+    risk: "Hatari",
+    normal: "Kawaida",
+    emergency_contact: "Dharura",
+    direct_line: "Njia ya Haraka",
+    generated_by: "Imezalishwa na UZAZI SALAMA AI",
+    soon: "Hivi karibuni",
+    current_health: "Afya yangu sasa",
+    last_checkup: "Ukaguzi wa mwisho",
+    days: "siku",
+    days_left: "SIKU ZILIZOBAKI",
+    medical_file: "Kadi ya matibabu",
+    see_details: "Angalia zaidi",
+    vital_signs: "Dalili za Uzima",
+    check_now: "Angalia afya sasa",
+    note_label: "Maelezo kwa daktari",
+    note_placeholder: "Eleza unavyohisi...",
+    tracking_details: "Maelezo ya Ufuatiliaji",
+    assigned_hospital: "Hospitali Iliyopangwa",
+    assigned_hospital_desc: "Kituo chako cha rejea",
+    emergency_desc: "Inapatikana saa 24",
+    weight_desc: "Uzito wa mwisho",
+    bp_desc: "Presha ya mwisho",
+    hospital_label: "Hospitali",
+    french: "KIFARANSA",
+    swahili: "KISWAHILI",
+    mashi: "KIMASHI",
+    dpa_label: "DPA (Tarehe)",
+    id_label: "ID Namba",
+    full_name: "Jina Lako Kamili",
+    full_name_placeholder: "Mifano: Zawadi Zawadi",
+    phone_label: "Simu (Airtel/Orange)",
+    lmp_date: "Tarehe ya Hedhi ya Mwisho",
+    medical_center: "Kituo chako cha Matibabu",
+    start_tracking: "Anza Ufuatiliaji",
+    continue: "Endelea",
+    app_subtitle: "Mwenzi wako mwerevu kwa uzazi salama kabisa.",
+    medical_record_title: "Kadi yangu ya afya",
+    followup_active: "Ufuatiliaji Unaoendelea",
     all_normal: "Kila kitu kinaonekana kuwa sawa.",
     start_checkup: "Anza ukaguzi",
     no_logs: "Hakuna kumbukumbu",
-    patient_notes: "Maelezo ya mgonjwa:"
+    patient_notes: "Maelezo ya mgonjwa:",
+    google_login: "Endelea na Google",
+    or: "AU",
+    app_tagline: "Mama na Mtoto",
+    generate_ai_advice: "Ushauri mupya wa IA (OMS)",
+    generating: "Inatafuta...",
+    fresh_advice: "Ushauri wa sasa",
+    who_label: "Kulingana na OMS",
+    admin_title: "Dashibodi ya Admin",
+    stats_overview: "Maendeleo ya Jumla",
+    hospitals_management: "Usimamizi wa Hospitali",
+    emergencies_management: "Namba za Dharura",
+    all_patients: "Wamama Wote",
+    predict_labor: "Utabiri wa Kujifungua",
+    labor_prediction_desc: "Kulingana na uchungu na historia",
+    admin_access_code: "Namba ya siri ya Admin",
+    admin_auth: "Utambulisho wa Admin",
+    access_granted: "Ruhusa Imetolewa",
+    reports: "Ripoti",
+    total_women: "Jumla ya Wamama",
   },
   MSH: {
     home: "Okukulikiriza",
@@ -145,6 +350,7 @@ const translations = {
     profil: "Bwinji",
     welcome: "Oye’be",
     journey: "Olugendo",
+    journey_label: "Olugendo lwawe",
     weeks: "Mviki",
     remaining: "Ocizigazize",
     diagnostic_ia: "Ocungule Amagala",
@@ -177,6 +383,16 @@ const translations = {
     hygiene: "Okuhya",
     mental_health: "Moral",
     trimester: "Miezi isharhu",
+    emergency: "Dhambi",
+    call_hospital: "Obahamagale emulasho",
+    kick_counter: "Okucungula omwana",
+    contractions: "Okulumwa",
+    start_counting: "Otangire okubala",
+    stop_counting: "Oyimange",
+    kicks_today: "Mishingo ya lelo",
+    weight_track: "Obuzito",
+    bp_track: "Okuzimba kwa mashi",
+    tools: "Emishi",
     medical_record: "Historia",
     medical_history: "Historia l’Amagala",
     back: "Ocigaluke",
@@ -184,10 +400,70 @@ const translations = {
     stable: "Amagala masiga",
     vigilance: "Okutahaza",
     action: "Icikorwa",
+    show_qr: "Okuyereka QR",
+    refresh_tips: "Amagezi gandi",
+    active_followup: "Okukulikiriza kuli kunciza",
+    risk: "Obuzine",
+    normal: "Boshi buli bwo",
+    emergency_contact: "Obuzine",
+    direct_line: "Emishi kwanji",
+    generated_by: "Bishoboza bye UZAZI SALAMA AI",
+    soon: "Hingirhi",
+    current_health: "Amagala gane gunola",
+    last_checkup: "Okulemya ku kasanzi",
+    days: "njiku",
+    days_left: "NJIKU ZICIGASIRE",
+    medical_file: "Kadi l'amagala",
+    see_details: "Olole bwinji",
+    vital_signs: "Emisi y'amagala",
+    check_now: "Ocungule amagala zene",
+    note_label: "Ecijibizyo c’omudoktere",
+    note_placeholder: "Omenyese buli bwo oli...",
+    tracking_details: "Okukulikiriza kwanji",
+    assigned_hospital: "Emulasho bayerekire",
+    assigned_hospital_desc: "Enyumba y'amagala gawe",
+    emergency_desc: "Saha muno-nane",
+    weight_desc: "Obuzito bucikuliki",
+    bp_desc: "Okuzimba kwa mashi",
+    hospital_label: "Emulasho",
+    french: "FRANÇAIS",
+    swahili: "SWAHILI",
+    mashi: "MASHI",
+    dpa_label: "DPA",
+    id_label: "ID",
+    full_name: "Izino lyawe lyoshi",
+    full_name_placeholder: "Kugalike: Zawadi Zawadi",
+    phone_label: "Emishi ye simu",
+    lmp_date: "Kasanzi l’okufunya",
+    medical_center: "Enyumba y’obuzine kwanji",
+    start_tracking: "Otangire okuchungula",
+    continue: "Okugenderera",
+    app_subtitle: "Okukulikiriza kuli kunciza obuzine bwawe.",
+    medical_record_title: "Kadi yawe",
+    followup_active: "Okukulikiriza kuli kunciza",
     all_normal: "Boshi buli bwo omu kasanzi kako.",
     start_checkup: "Oryuse okuchungula",
     no_logs: "Nta nambari hifi",
-    patient_notes: "Bishoboza bye muntu:"
+    patient_notes: "Bishoboza bye muntu:",
+    google_login: "Oyandike n'Google",
+    or: "KABA",
+    app_tagline: "Omubyere n'omwana",
+    generate_ai_advice: "Amagezi mayahya ga IA (OMS)",
+    generating: "Okuchuuliriza...",
+    fresh_advice: "Amagezi ga kasanzi",
+    who_label: "Kulusha kwa OMS",
+    admin_title: "Tableau de Bord Admin",
+    stats_overview: "Okukulikiriza Kwoshi",
+    hospitals_management: "Management ya Emulasho",
+    emergencies_management: "Emishi ya Dhambi",
+    all_patients: "Abamyere Boshi",
+    predict_labor: "Okuhubirira kwa lufuatu",
+    labor_prediction_desc: "Kulusha kwa mishingo",
+    admin_access_code: "Code ya Admin",
+    admin_auth: "Admin Auth",
+    access_granted: "Obuhashe bwahebwa",
+    reports: "Rapports",
+    total_women: "Bamyere Boshi",
   }
 };
 
@@ -273,6 +549,47 @@ const calculateDueDate = (lastPeriodDate: string) => {
 
 // --- Components ---
 
+function KickCounterCard({ t }: { t: any }) {
+  const [kicks, setKicks] = useState(0);
+  const [isCounting, setIsCounting] = useState(false);
+
+  return (
+    <div className="bg-gray-800/40 p-6 rounded-[2rem] shadow-sm border border-white/5 flex flex-col items-center justify-center text-center group h-full">
+      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 transition-all duration-500 ${isCounting ? 'bg-brand-primary text-gray-900 animate-pulse scale-110 shadow-lg shadow-brand-primary/20' : 'bg-brand-primary/10 text-brand-primary'}`}>
+        <Activity size={24} />
+      </div>
+      <p className="text-[10px] font-black uppercase text-gray-500 tracking-[0.3em] mb-1 italic">{t.kick_counter}</p>
+      <p className="text-2xl font-black text-white leading-none border-none">{kicks}</p>
+      
+      <div className="flex gap-2 mt-4">
+        {!isCounting ? (
+          <button 
+            onClick={() => setIsCounting(true)}
+            className="text-[10px] font-black uppercase bg-white/5 px-4 py-2 rounded-xl text-gray-400 hover:bg-white/10 transition-colors"
+          >
+            {t.start_counting}
+          </button>
+        ) : (
+          <div className="flex gap-2">
+            <button 
+              onClick={() => setKicks(k => k + 1)}
+              className="w-10 h-10 bg-brand-primary text-gray-900 rounded-xl flex items-center justify-center shadow-lg active:scale-90 transition-transform"
+            >
+              +1
+            </button>
+            <button 
+              onClick={() => setIsCounting(false)}
+              className="text-[10px] font-black uppercase bg-red-400/10 px-4 py-2 rounded-xl text-red-400"
+            >
+              {t.stop_counting}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function NavButton({ active, icon: Icon, label, onClick }: { active: boolean, icon: any, label: string, onClick: () => void }) {
   return (
     <button 
@@ -285,14 +602,179 @@ function NavButton({ active, icon: Icon, label, onClick }: { active: boolean, ic
   );
 }
 
+function AdminView({ language }: { language: Language }) {
+  const t = translations[language];
+  const [patientsCount, setPatientsCount] = useState(0);
+  const [hospitals, setHospitals] = useState<Hospital[]>([]);
+  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'patients' | 'hospitals' | 'emergencies'>('overview');
+
+  useEffect(() => {
+    // Local data only
+    setHospitals(HOSPITALS as any);
+  }, []);
+
+  return (
+    <div className="p-6 space-y-8 max-w-6xl mx-auto min-h-screen pb-32">
+       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-gray-800/20 p-8 rounded-[3rem] border border-white/5">
+          <div className="flex items-center gap-4">
+             <div className="w-16 h-16 bg-brand-primary rounded-[1.5rem] flex items-center justify-center text-gray-900 shadow-xl">
+                <ShieldCheck size={32} />
+             </div>
+             <div>
+                <h2 className="text-3xl font-display font-black text-white border-none leading-none tracking-tight">{t.admin_title}</h2>
+                <p className="text-[11px] font-black text-gray-500 uppercase tracking-widest mt-2">{t.access_granted}</p>
+             </div>
+          </div>
+       </header>
+
+       <div className="flex gap-2 overflow-x-auto no-scrollbar py-2">
+          {['overview', 'patients', 'hospitals', 'emergencies'].map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveSubTab(tab as any)}
+              className={`px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
+                activeSubTab === tab ? 'bg-brand-primary text-gray-900 shadow-lg' : 'bg-white/5 text-gray-400 border border-white/10'
+              }`}
+            >
+              {t[`${tab}_management` as keyof typeof t] || t[tab as keyof typeof t] || tab}
+            </button>
+          ))}
+       </div>
+
+       {activeSubTab === 'overview' && (
+         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="bg-gray-800/40 p-8 rounded-[2.5rem] border border-white/5 shadow-xl">
+               <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4">{t.total_women}</p>
+               <h3 className="text-5xl font-black text-white leading-none">{patientsCount}</h3>
+               <div className="mt-6 flex items-center justify-between text-brand-primary">
+                  <span className="text-[10px] font-black uppercase tracking-widest">{t.reports}</span>
+                  <History size={20} />
+               </div>
+            </div>
+            
+            <div className="bg-gray-800/40 p-8 rounded-[2.5rem] border border-white/5 shadow-xl">
+               <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4">{t.hospitals_management}</p>
+               <h3 className="text-5xl font-black text-white leading-none">{hospitals.length}</h3>
+               <div className="mt-6 flex items-center justify-between text-blue-400">
+                  <span className="text-[10px] font-black uppercase tracking-widest">{t.all}</span>
+                  <MapPin size={20} />
+               </div>
+            </div>
+         </div>
+       )}
+
+       {activeSubTab === 'hospitals' && (
+         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {hospitals.map(h => (
+              <div key={h.id} className="bg-gray-800/20 p-8 rounded-[3rem] border border-white/5 flex flex-col gap-6">
+                 <div className="flex justify-between items-start">
+                    <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-brand-primary">
+                       <MapPin size={24} />
+                    </div>
+                    <button className="p-2 hover:text-brand-primary"><Plus size={20} /></button>
+                 </div>
+                 <div>
+                    <h4 className="text-xl font-black text-white uppercase tracking-tight">{h.name}</h4>
+                    <p className="text-xs text-gray-500 font-medium mt-1">{h.location}</p>
+                 </div>
+                 <div className="pt-4 border-t border-white/5 flex items-center gap-4 text-xs font-black text-gray-500 tracking-widest">
+                    <Phone size={14} className="text-red-400" /> {h.phone}
+                 </div>
+              </div>
+            ))}
+         </div>
+       )}
+    </div>
+  );
+}
+
+// --- Main App Component ---
+
 export default function App() {
+  const { user, loading, login: googleLogin, logout: googleLogout } = useAuth();
   const [patient, setPatient] = useState<Patient | null>(null);
-  const [activeTab, setActiveTab] = useState<'home' | 'checkup' | 'education' | 'profile' | 'record'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'checkup' | 'education' | 'profile' | 'record' | 'admin'>('home');
+  const [isAdmin, setIsAdmin] = useState(false);
   const [logs, setLogs] = useState<CheckupLog[]>([]);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [language, setLanguage] = useState<Language>('FR');
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const t = translations[language];
+
+  // Logic to load data on mount
+  useEffect(() => {
+    if (!user) return;
+
+    // Sync patient data
+    const unsubPatient = onSnapshot(doc(db, 'users', user.uid), (snap) => {
+      if (snap.exists()) {
+        const p = snap.data() as Patient;
+        setPatient(p);
+        setIsAdmin(!!p.isAdmin);
+        if (p.language) setLanguage(p.language as Language);
+        localStorage.setItem('uzazi_patient', JSON.stringify(p));
+      }
+    });
+
+    // Sync logs
+    const q = query(collection(db, 'users', user.uid, 'logs'), orderBy('createdAt', 'desc'));
+    const unsubLogs = onSnapshot(q, (snap) => {
+      const logsData = snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as CheckupLog));
+      setLogs(logsData);
+      localStorage.setItem('uzazi_logs', JSON.stringify(logsData));
+    });
+
+    return () => {
+      unsubPatient();
+      unsubLogs();
+    };
+  }, [user]);
+
+  const handleLogin = async (name: string) => {
+    setIsLoggingIn(true);
+    setError(null);
+    try {
+      await googleLogin();
+    } catch (e: any) {
+      console.error("Login error:", e);
+      setError("Erreur de connexion");
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await googleLogout();
+    setPatient(null);
+    setLogs([]);
+    localStorage.removeItem('uzazi_patient');
+    localStorage.removeItem('uzazi_logs');
+    setIsAdmin(false);
+    setActiveTab('home');
+    setShowOnboarding(false);
+  };
+
+  const handleLanguageChange = async (lang: Language) => {
+    setLanguage(lang);
+    if (user && patient) {
+      try {
+        const updatedPatient = { ...patient, language: lang };
+        setPatient(updatedPatient);
+        localStorage.setItem('uzazi_patient', JSON.stringify(updatedPatient));
+        
+        await updateDoc(doc(db, 'users', user.uid), {
+          language: lang,
+          updatedAt: serverTimestamp()
+        });
+      } catch (e) {
+        console.error("Failed to update language in Firestore", e);
+      }
+    }
+  };
 
   useEffect(() => {
     // Handle QR code link
@@ -309,6 +791,7 @@ export default function App() {
             id: decoded.id,
             name: decoded.n,
             phone: decoded.p,
+            weight: 65, // Default for shared record
             weeksPregnant: decoded.w,
             lastPeriodDate: new Date().toISOString(), // Mocked as it's not in the small QR
             dueDate: new Date().toISOString(),
@@ -334,7 +817,9 @@ export default function App() {
 
     const saved = localStorage.getItem('uzazi_patient');
     if (saved) {
-      setPatient(JSON.parse(saved));
+      const p = JSON.parse(saved);
+      setPatient(p);
+      setIsAdmin(!!p.isAdmin);
     } else {
       setShowOnboarding(true);
     }
@@ -345,53 +830,84 @@ export default function App() {
     }
   }, []);
 
-  const handleRegister = (name: string, phone: string, lmp: string, hospitalId: string) => {
-    const newPatient: Patient = {
-      id: Math.random().toString(36).substr(2, 9),
-      name,
-      phone,
-      lastPeriodDate: lmp,
-      dueDate: calculateDueDate(lmp),
-      weeksPregnant: calculateWeeksPregnant(lmp),
-      assignedHospitalId: hospitalId
-    };
-    setPatient(newPatient);
-    localStorage.setItem('uzazi_patient', JSON.stringify(newPatient));
-    setShowOnboarding(false);
+  const handleRegister = async (name: string, phone: string, lmp: string, hospitalId: string) => {
+    if (!user) return;
+    setIsRegistering(true);
+    setError(null);
+    try {
+      const newPatient: Patient = {
+        id: user.uid,
+        name,
+        phone,
+        weight: 65, // Default weight
+        lastPeriodDate: lmp,
+        dueDate: calculateDueDate(lmp),
+        weeksPregnant: calculateWeeksPregnant(lmp),
+        assignedHospitalId: hospitalId,
+        language: language,
+        isAdmin: user.email === 'princebamba2112@gmail.com',
+      };
+      
+      await setDoc(doc(db, 'users', user.uid), {
+        ...newPatient,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      
+      setPatient(newPatient);
+      localStorage.setItem('uzazi_patient', JSON.stringify(newPatient));
+      setShowOnboarding(false);
+    } catch (e: any) {
+      console.error("Registration error:", e);
+      handleFirestoreError(e, 'create', `users/${user.uid}`);
+      setError("Erreur d'inscription");
+    } finally {
+      setIsRegistering(false);
+    }
   };
 
-  const handleAddLog = async (newLog: { symptoms: string[], bloodPressure?: string, weight?: number }) => {
+  const handleAddLog = async (newLog: { symptoms: string[], bloodPressure?: string, weight?: number, notes?: string }) => {
+    if (!user || !patient) return;
+    
     setIsAnalyzing(true);
-    setActiveTab('home'); // Transition early to show loading state
+    setActiveTab('home'); 
 
-    const aiResult = await analyzeSymptoms(newLog, language);
+    try {
+      const aiResult = await analyzeSymptoms(newLog, language);
 
-    const log: CheckupLog = {
-      ...newLog,
-      id: Math.random().toString(36).substr(2, 9),
-      patientId: patient?.id || '',
-      date: new Date().toISOString(),
-      status: aiResult.status as HealthStatus,
-      aiAnalysis: aiResult.analysis
-    };
-    const updatedLogs = [log, ...logs];
-    setLogs(updatedLogs);
-    localStorage.setItem('uzazi_logs', JSON.stringify(updatedLogs));
-    setIsAnalyzing(false);
+      const logData = {
+        ...newLog,
+        patientId: user.uid,
+        date: new Date().toISOString(),
+        status: aiResult.status as HealthStatus,
+        aiAnalysis: aiResult.analysis,
+        createdAt: serverTimestamp()
+      };
+
+      await addDoc(collection(db, 'users', user.uid, 'logs'), logData);
+    } catch (e: any) {
+      console.error("Failed to save log", e);
+      handleFirestoreError(e, 'create', `users/${user.uid}/logs`);
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
-  const logout = () => {
-    localStorage.clear();
-    setPatient(null);
-    setLogs([]);
-    setShowOnboarding(true);
-  };
-
-  if (showOnboarding) {
-    return <Onboarding onRegister={handleRegister} language={language} />;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <Loader2 className="text-brand-primary animate-spin" size={48} />
+      </div>
+    );
   }
 
-  if (!patient) return null;
+  if (!user || !patient) {
+    return <Login onLogin={handleLogin} language={language} isLoading={isLoggingIn} error={error} />;
+  }
+
+  if (showOnboarding) {
+    return <Onboarding onRegister={handleRegister} language={language} initialName={patient.name} isLoading={isRegistering} error={error} />;
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-app-bg dark font-sans selection:bg-brand-primary/30">
@@ -399,55 +915,61 @@ export default function App() {
       <header className="sticky top-0 w-full bg-gray-900/80 backdrop-blur-xl border-b border-white/5 flex justify-center z-[100]">
         <div className="w-full max-w-5xl px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <motion.div 
-              whileHover={{ rotate: 180 }}
-              className="w-12 h-12 bg-white p-1 rounded-2xl flex items-center justify-center overflow-hidden shadow-lg border-2 border-brand-primary"
-            >
-              <img 
-                src="https://plus.unsplash.com/premium_photo-1675713430635-424a132e4785?auto=format&fit=crop&q=80&w=200" 
-                alt="Profile" 
-                className="w-full h-full object-cover rounded-xl"
-                referrerPolicy="no-referrer"
-              />
-            </motion.div>
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-brand-primary rounded-2xl flex items-center justify-center text-gray-900 shadow-lg shadow-brand-primary/20">
+              <Heart size={24} fill="currentColor" />
+            </div>
             <div>
-              <h1 className="text-base md:text-xl font-display font-black text-white border-none leading-none tracking-tight">Uzazi Salama</h1>
+              <h1 className="text-xl font-display font-black text-white border-none leading-none tracking-tighter">UZAZI</h1>
+              <p className="text-[8px] font-black tracking-[0.3em] text-brand-primary/60 uppercase">{t.app_tagline}</p>
             </div>
           </div>
           
-          <div className="relative">
-            <button 
-              onClick={() => setIsLanguageMenuOpen(!isLanguageMenuOpen)}
-              className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-2 rounded-xl hover:bg-white/10 transition-colors"
+          <div className="flex items-center gap-2 md:gap-4">
+             <button 
+              onClick={() => {
+                const hospital = HOSPITALS.find(h => h.id === (patient as any).assignedHospitalId);
+                if (hospital) window.location.href = `tel:${hospital.emergencyContact}`;
+              }}
+              className="bg-red-400/10 text-red-400 p-2.5 rounded-xl hover:bg-red-400/20 transition-colors shadow-lg"
+              title={(translations[language] as any).call_hospital}
             >
-              <Languages size={14} className="text-brand-primary" />
-              <span className="text-[10px] font-black tracking-widest text-white">{language}</span>
-              <ChevronDown size={14} className={`text-gray-400 transition-transform ${isLanguageMenuOpen ? 'rotate-180' : ''}`} />
+              <Phone size={18} />
             </button>
-            
-            <AnimatePresence>
-              {isLanguageMenuOpen && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  className="absolute right-0 mt-2 w-32 bg-gray-800 border border-white/10 rounded-2xl shadow-2xl z-[110] py-2"
-                >
-                  {(['FR', 'SW', 'MSH'] as Language[]).map(lang => (
-                    <button 
-                      key={lang}
-                      onClick={() => {
-                        setLanguage(lang);
-                        setIsLanguageMenuOpen(false);
-                      }}
-                      className={`w-full text-left px-4 py-2 text-[10px] font-black tracking-widest hover:bg-brand-primary/10 transition-colors ${language === lang ? 'text-brand-primary' : 'text-gray-300'}`}
-                    >
-                      {lang === 'FR' ? 'FRANÇAIS' : lang === 'SW' ? 'SWAHILI' : 'MASHI'}
-                    </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
+
+            <div className="relative">
+              <button 
+                onClick={() => setIsLanguageMenuOpen(!isLanguageMenuOpen)}
+                className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-2 rounded-xl hover:bg-white/10 transition-colors"
+              >
+                <Languages size={14} className="text-brand-primary" />
+                <span className="text-[10px] font-black tracking-widest text-white">{language}</span>
+                <ChevronDown size={14} className={`text-gray-400 transition-transform ${isLanguageMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+              
+              <AnimatePresence>
+                {isLanguageMenuOpen && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    className="absolute right-0 mt-2 w-32 bg-gray-800 border border-white/10 rounded-2xl shadow-2xl z-[110] py-2"
+                  >
+                    {(['FR', 'SW', 'MSH'] as Language[]).map(lang => (
+                      <button 
+                        key={lang}
+                        onClick={() => {
+                          handleLanguageChange(lang);
+                          setIsLanguageMenuOpen(false);
+                        }}
+                        className={`w-full text-left px-4 py-2 text-[10px] font-black tracking-widest hover:bg-brand-primary/10 transition-colors ${language === lang ? 'text-brand-primary' : 'text-gray-300'}`}
+                      >
+                        {lang === 'FR' ? t.french : lang === 'SW' ? t.swahili : t.mashi}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
       </header>
@@ -462,7 +984,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="max-w-4xl mx-auto"
+              className="max-w-6xl mx-auto w-full"
             >
               <HomeView 
                 patient={patient} 
@@ -504,9 +1026,21 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 50 }}
               transition={{ type: "spring", damping: 20, stiffness: 100 }}
-              className="max-w-2xl mx-auto"
+              className="max-w-6xl mx-auto w-full"
             >
-              <ProfileView patient={patient!} logs={logs} onLogout={logout} language={language} />
+              <ProfileView patient={patient!} logs={logs} onLogout={handleLogout} language={language} onTabChange={setActiveTab} />
+            </motion.div>
+          )}
+          {activeTab === 'admin' && isAdmin && (
+            <motion.div
+              key="admin"
+              initial={{ opacity: 0, y: 50 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 50 }}
+              transition={{ type: "spring", damping: 20, stiffness: 100 }}
+              className="max-w-6xl mx-auto w-full"
+            >
+              <AdminView language={language} />
             </motion.div>
           )}
           {activeTab === 'record' && (
@@ -514,7 +1048,7 @@ export default function App() {
               key="record"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="max-w-4xl mx-auto"
+              className="max-w-6xl mx-auto w-full"
             >
               <RecordView patient={patient!} logs={logs} language={language} onBack={() => setActiveTab('home')} />
             </motion.div>
@@ -530,6 +1064,14 @@ export default function App() {
             <NavButton active={activeTab === 'checkup'} icon={Stethoscope} label={translations[language].suivi} onClick={() => setActiveTab('checkup')} />
             <NavButton active={activeTab === 'education'} icon={BookOpen} label={translations[language].conseil} onClick={() => setActiveTab('education')} />
             <NavButton active={activeTab === 'profile'} icon={User} label={translations[language].profil} onClick={() => setActiveTab('profile')} />
+            {isAdmin && (
+               <NavButton 
+                active={activeTab === 'admin'} 
+                icon={ShieldCheck} 
+                label="Admin" 
+                onClick={() => setActiveTab('admin')} 
+              />
+            )}
           </nav>
         </div>
       )}
@@ -539,32 +1081,54 @@ export default function App() {
 
 // --- Sub-Views ---
 
-function Onboarding({ onRegister, language }: { onRegister: (name: string, phone: string, lmp: string, hospitalId: string) => void, language: Language }) {
+function Login({ onLogin, language, isLoading, error }: { onLogin: (name: string) => void, language: Language, isLoading: boolean, error: string | null }) {
   const t = translations[language];
-  const [step, setStep] = useState(1);
+
+  return (
+    <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-6 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-green-900/20 via-gray-900 to-gray-900">
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-sm space-y-8"
+      >
+        <div className="text-center space-y-4">
+          <div className="w-20 h-20 bg-brand-primary/20 rounded-[2rem] flex items-center justify-center text-brand-primary mb-6 mx-auto shadow-2xl">
+            <Baby size={48} className="animate-pulse" />
+          </div>
+          <h1 className="text-4xl font-display font-black text-white border-none tracking-tight">UZAZI SALAMA</h1>
+          <p className="text-gray-400 font-medium">{t.app_subtitle}</p>
+        </div>
+
+        <div className="bg-white/5 p-8 rounded-[3rem] border border-white/10 space-y-6 backdrop-blur-xl">
+          {error && (
+            <p className="text-red-400 text-xs font-bold text-center animate-shake">{error}</p>
+          )}
+
+          <button 
+            onClick={() => onLogin('google')}
+            disabled={isLoading}
+            className="w-full bg-brand-primary hover:bg-brand-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 font-black py-5 rounded-2xl shadow-xl shadow-brand-primary/20 transition-all active:scale-95 flex items-center justify-center gap-3"
+          >
+            {isLoading ? <Loader2 className="animate-spin" /> : <ShieldCheck size={20} />}
+            {!isLoading && t.google_login}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function Onboarding({ onRegister, language, initialName, isLoading, error: parentError }: { onRegister: (name: string, phone: string, lmp: string, hospitalId: string) => void, language: Language, initialName: string, isLoading: boolean, error: string | null }) {
+  const t = translations[language];
   const [formData, setFormData] = useState({
-    name: '',
+    name: initialName,
     phone: '',
     lmp: '',
     hospitalId: HOSPITALS[0].id
   });
-  const [error, setError] = useState('');
+  const [localError, setLocalError] = useState('');
 
-  const validateAndNext = () => {
-    if (step === 2) {
-      const lmpDate = new Date(formData.lmp);
-      const today = new Date();
-      const tenMonthsAgo = new Date();
-      tenMonthsAgo.setMonth(today.getMonth() - 10);
-
-      if (lmpDate > today || lmpDate < tenMonthsAgo || isNaN(lmpDate.getTime())) {
-        setError(t.invalid_date);
-        return;
-      }
-    }
-    setError('');
-    setStep(step + 1);
-  };
+  const displayError = localError || parentError;
 
   return (
     <div className="flex flex-col min-h-screen max-w-md mx-auto bg-app-bg p-8">
@@ -576,89 +1140,78 @@ function Onboarding({ onRegister, language }: { onRegister: (name: string, phone
         <div className="w-20 h-20 bg-brand-primary/20 rounded-[2rem] flex items-center justify-center text-brand-primary mb-8 mx-auto shadow-2xl shadow-green-900/20">
           <Baby size={48} className="animate-pulse" />
         </div>
-        <h1 className="text-3xl font-display font-black text-white border-none text-center leading-tight">Uzazi Salama</h1>
-        <p className="text-gray-500 mt-3 text-center text-sm font-medium leading-relaxed px-4">Votre partenaire intelligent pour une maternité en toute sécurité.</p>
+        <h1 className="text-3xl font-display font-black text-white border-none text-center leading-tight">UZAZI SALAMA</h1>
+        <p className="text-gray-500 mt-3 text-center text-sm font-medium leading-relaxed px-4">{t.app_subtitle}</p>
       </motion.div>
 
       <div className="space-y-8">
-        {step === 1 ? (
-          <motion.div 
-            initial={{ opacity: 0, x: 20 }} 
-            animate={{ opacity: 1, x: 0 }}
-            className="space-y-6"
-          >
+        <motion.div 
+          initial={{ opacity: 0, x: 20 }} 
+          animate={{ opacity: 1, x: 0 }}
+          className="space-y-6"
+        >
+          <div className="space-y-5">
             <div>
-              <label className="block text-[10px] font-black text-brand-primary uppercase tracking-[0.3em] mb-3">Votre Nom Complet</label>
+              <label className="block text-[10px] font-black text-brand-primary uppercase tracking-[0.3em] mb-3 font-sans italic">{t.phone_label}</label>
               <input 
-                type="text" 
-                placeholder="Ex: Zawadi Zawadi"
-                className="w-full px-5 py-4 rounded-2xl border border-white/5 bg-white/5 text-white placeholder-gray-600 focus:bg-white/10 focus:ring-2 focus:ring-brand-primary focus:outline-none transition-all font-bold"
-                value={formData.name}
-                onChange={(e) => setFormData({...formData, name: e.target.value})}
+                type="tel" 
+                placeholder="+243 ..."
+                className="w-full px-5 py-4 rounded-2xl border border-white/5 bg-white/5 text-white placeholder-gray-600 focus:bg-white/10 focus:ring-2 focus:ring-brand-primary focus:outline-none font-bold"
+                value={formData.phone}
+                onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                disabled={isLoading}
               />
             </div>
-            <motion.button 
-              whileTap={{ scale: 0.95 }}
-              onClick={() => step === 1 && formData.name && setStep(2)}
-              className="w-full bg-brand-primary text-gray-900 py-5 rounded-2xl font-black shadow-2xl shadow-green-900/20 flex items-center justify-center gap-2 text-sm uppercase tracking-widest"
-            >
-              Continuer <ChevronRight size={18} />
-            </motion.button>
-          </motion.div>
-        ) : (
-          <motion.div 
-            initial={{ opacity: 0, x: 20 }} 
-            animate={{ opacity: 1, x: 0 }}
-            className="space-y-6"
-          >
-             <button onClick={() => setStep(1)} className="text-[10px] font-black text-gray-500 mb-2 flex items-center gap-1 uppercase tracking-widest hover:text-white transition-colors">
-              <ArrowLeft size={14} /> Retour
-            </button>
-            <div className="space-y-5">
-              <div>
-                <label className="block text-[10px] font-black text-brand-primary uppercase tracking-[0.3em] mb-3">Téléphone (Airtel/Orange)</label>
-                <input 
-                  type="tel" 
-                  placeholder="+243 ..."
-                  className="w-full px-5 py-4 rounded-2xl border border-white/5 bg-white/5 text-white placeholder-gray-600 focus:bg-white/10 focus:ring-2 focus:ring-brand-primary focus:outline-none font-bold"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-brand-primary uppercase tracking-[0.3em] mb-3">Date des Dernières Règles</label>
-                <input 
-                  type="date" 
-                  className="w-full px-5 py-4 rounded-2xl border border-white/5 bg-white/5 text-white focus:bg-white/10 focus:ring-2 focus:ring-brand-primary focus:outline-none font-bold"
-                  value={formData.lmp}
-                  onChange={(e) => setFormData({...formData, lmp: e.target.value})}
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-brand-primary uppercase tracking-[0.3em] mb-3">Votre Centre Médical</label>
-                <div className="relative">
-                  <select 
-                    className="w-full px-5 py-4 rounded-2xl border border-white/5 bg-white/5 text-white focus:bg-white/10 focus:ring-2 focus:ring-brand-primary focus:outline-none appearance-none font-bold"
-                    value={formData.hospitalId}
-                    onChange={(e) => setFormData({...formData, hospitalId: e.target.value})}
-                  >
-                    {HOSPITALS.map(h => (
-                      <option key={h.id} value={h.id}>{h.name}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" size={18} />
-                </div>
+            <div>
+              <label className="block text-[10px] font-black text-brand-primary uppercase tracking-[0.3em] mb-3 font-sans italic">{t.lmp_date}</label>
+              <input 
+                type="date" 
+                className="w-full px-5 py-4 rounded-2xl border border-white/5 bg-white/5 text-white focus:bg-white/10 focus:ring-2 focus:ring-brand-primary focus:outline-none font-bold"
+                value={formData.lmp}
+                onChange={(e) => setFormData({...formData, lmp: e.target.value})}
+                disabled={isLoading}
+              />
+               {displayError && <p className="text-red-400 text-[10px] font-bold mt-2 uppercase tracking-widest">{displayError}</p>}
+            </div>
+            <div>
+              <label className="block text-[10px] font-black text-brand-primary uppercase tracking-[0.3em] mb-3 font-sans italic">{t.medical_center}</label>
+              <div className="relative">
+                <select 
+                  className="w-full px-5 py-4 rounded-2xl border border-white/5 bg-white/5 text-white focus:bg-white/10 focus:ring-2 focus:ring-brand-primary focus:outline-none appearance-none font-bold"
+                  value={formData.hospitalId}
+                  onChange={(e) => setFormData({...formData, hospitalId: e.target.value})}
+                  disabled={isLoading}
+                >
+                  {HOSPITALS.map(h => (
+                    <option key={h.id} value={h.id}>{h.name}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" size={18} />
               </div>
             </div>
-            <motion.button 
-              whileTap={{ scale: 0.95 }}
-              onClick={() => onRegister(formData.name, formData.phone, formData.lmp, formData.hospitalId)}
-              className="w-full bg-brand-primary text-gray-900 py-5 rounded-2xl font-black shadow-2xl shadow-green-900/20 text-sm uppercase tracking-widest mt-4"
-            >
-              Lancer mon Suivi
-            </motion.button>
-          </motion.div>
-        )}
+          </div>
+          <motion.button 
+            whileTap={{ scale: 0.95 }}
+            disabled={isLoading}
+            onClick={() => {
+              const lmpDate = new Date(formData.lmp);
+              const today = new Date();
+              const tenMonthsAgo = new Date();
+              tenMonthsAgo.setMonth(today.getMonth() - 10);
+
+              if (lmpDate > today || lmpDate < tenMonthsAgo || isNaN(lmpDate.getTime())) {
+                setLocalError(t.invalid_date);
+                return;
+              }
+              setLocalError('');
+              onRegister(formData.name, formData.phone, formData.lmp, formData.hospitalId);
+            }}
+            className="w-full bg-brand-primary hover:bg-brand-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 py-5 rounded-2xl font-black shadow-2xl flex items-center justify-center gap-2 text-sm uppercase tracking-widest mt-4"
+          >
+            {isLoading ? <Loader2 className="animate-spin" /> : t.start_tracking}
+            {!isLoading && <ArrowRight size={18} />}
+          </motion.button>
+        </motion.div>
       </div>
     </div>
   );
@@ -684,11 +1237,72 @@ function HomeView({
   // Trimester-specific rotating tip
   const currentTrimester = patient.weeksPregnant <= 13 ? 1 : patient.weeksPregnant <= 26 ? 2 : 3;
   const trimesterTips = EDUCATION_ARTICLES.filter(a => !a.trimester || a.trimester === currentTrimester);
-  const dailyTip = trimesterTips[Math.floor(new Date().getDate() % trimesterTips.length)];
+  
+  const [tipIndex, setTipIndex] = useState(0);
+
+  useEffect(() => {
+    // Pick a random tip on mount
+    setTipIndex(Math.floor(Math.random() * trimesterTips.length));
+
+    // Auto-refresh tips every 5 minutes
+    const interval = setInterval(() => {
+      setTipIndex(prev => (prev + 1) % trimesterTips.length);
+    }, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [patient.weeksPregnant]);
+
+  const dailyTip = trimesterTips[tipIndex] || trimesterTips[0];
+
+  const refreshTip = () => {
+    let nextIndex;
+    do {
+      nextIndex = Math.floor(Math.random() * trimesterTips.length);
+    } while (nextIndex === tipIndex && trimesterTips.length > 1);
+    setTipIndex(nextIndex);
+  };
+
+  // Labor Prediction Logic
+  const getLaborPrediction = () => {
+    if (patient.weeksPregnant < 36) return null;
+    
+    // Simulate prediction based on weeks and random variance for demo
+    const baseDate = new Date(patient.dueDate);
+    const prediction = new Date(baseDate.getTime() + (Math.random() * 4 - 2) * 24 * 60 * 60 * 1000); // ±2 days from due date
+    const hour = Math.floor(Math.random() * 24);
+    prediction.setHours(hour, 0, 0, 0);
+    
+    return {
+      date: prediction.toLocaleDateString(language === 'FR' ? 'fr-FR' : 'sw-KE'),
+      time: `${hour}h00`
+    };
+  };
+
+  const laborPrediction = getLaborPrediction();
 
   return (
     <div className="p-6 space-y-8 max-w-5xl mx-auto">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        
+        {/* Prediction Card if near term */}
+        {laborPrediction && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="lg:col-span-12 bg-white p-6 rounded-[2.5rem] shadow-xl border-l-8 border-brand-primary flex items-center gap-6"
+          >
+            <div className="w-16 h-16 bg-brand-primary/10 rounded-2xl flex items-center justify-center text-brand-primary shrink-0">
+               <Clock size={32} className="animate-pulse" />
+            </div>
+            <div>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{t.predict_labor}</p>
+              <h3 className="text-xl font-display font-black text-gray-900 border-none leading-tight">
+                {laborPrediction.date} à {laborPrediction.time}
+              </h3>
+              <p className="text-[10px] text-gray-400 font-medium italic mt-1">{t.labor_prediction_desc}</p>
+            </div>
+          </motion.div>
+        )}
         <div className="lg:col-span-12">
            <motion.div 
             initial={{ opacity: 0, x: -50 }}
@@ -709,7 +1323,7 @@ function HomeView({
           >
             <div className="relative z-10">
               <p className="text-[10px] opacity-60 uppercase font-black tracking-[0.3em] border-none">{t.welcome}, {patient.name.split(' ')[0]}!</p>
-              <h2 className="text-2xl md:text-3xl font-display font-black mt-2 border-none text-white leading-tight">{t.journey}</h2>
+              <h2 className="text-2xl md:text-3xl font-display font-black mt-2 border-none text-white leading-tight">{t.journey_label || t.journey}</h2>
               
               <div className="mt-10 flex items-center gap-8">
                 <div className="relative">
@@ -738,7 +1352,7 @@ function HomeView({
                 <div className="flex-1 space-y-1">
                   <p className="text-[10px] font-black uppercase tracking-widest opacity-40 italic">{t.remaining}</p>
                   <p className="text-3xl md:text-4xl font-black tabular-nums text-white">{weeksRemaining < 0 ? 0 : weeksRemaining} <span className="text-[10px] uppercase font-black opacity-40">{t.weeks}</span></p>
-                  <p className="text-[10px] font-bold opacity-60 mt-2">DPA: {new Date(patient.dueDate).toLocaleDateString()}</p>
+                  <p className="text-[10px] font-bold opacity-60 mt-2">{t.dpa_label}: {new Date(patient.dueDate).toLocaleDateString()}</p>
                 </div>
               </div>
             </div>
@@ -759,6 +1373,9 @@ function HomeView({
 
         {/* Right Column: Information & Daily Tip */}
         <div className="lg:col-span-5 space-y-8">
+          <div className="px-4">
+             <h4 className="text-[10px] font-black uppercase text-gray-500 tracking-[0.4em] italic">{t.current_health}</h4>
+          </div>
           <AnimatePresence mode="wait">
             {isAnalyzing ? (
               <motion.div 
@@ -817,16 +1434,36 @@ function HomeView({
 
           {/* Daily Tip Card */}
           <motion.div 
-            whileHover={{ y: -5 }}
-            className="bg-gray-800/40 rounded-[2.5rem] border border-white/5 overflow-hidden shadow-xl"
+            layout
+            className="bg-gray-800/40 rounded-[2.5rem] border border-white/5 overflow-hidden shadow-sm group hover:border-brand-primary/30 transition-all duration-500"
           >
-            {dailyTip.imageUrl && (
-              <img src={dailyTip.imageUrl} alt="Tip" className="w-full h-32 object-cover opacity-50 grayscale hover:grayscale-0 transition-all duration-500" referrerPolicy="no-referrer" />
-            )}
-            <div className="p-8">
-              <p className="text-[10px] font-black text-brand-primary uppercase tracking-[0.3em] mb-2">{t.conseil} — {t[dailyTip.category as keyof typeof t] || dailyTip.category}</p>
-              <h3 className="font-display font-black text-white text-lg border-none leading-tight">{dailyTip.translations[language].title}</h3>
-              <p className="text-gray-400 text-xs mt-3 leading-relaxed italic font-medium">{dailyTip.translations[language].content}</p>
+            <div className="relative">
+              {dailyTip.imageUrl && (
+                <img src={dailyTip.imageUrl} alt="Tip" className="w-full h-48 object-cover opacity-60 grayscale group-hover:grayscale-0 transition-all duration-700 hover:scale-105" referrerPolicy="no-referrer" />
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/40 to-transparent"></div>
+              <div className="absolute top-4 right-4">
+                <button 
+                  onClick={refreshTip}
+                  className="bg-white/10 backdrop-blur-md p-3 rounded-2xl text-white hover:bg-brand-primary hover:text-gray-900 transition-all active:scale-90 shadow-xl border border-white/10"
+                >
+                  <RefreshCw size={20} className="hover:rotate-180 transition-transform duration-500" />
+                </button>
+              </div>
+            </div>
+            <div className="p-8 relative">
+              <p className="text-[10px] font-black text-brand-primary uppercase tracking-[0.4em] mb-3">{t.conseil} — {t[dailyTip.category as keyof typeof t] || dailyTip.category}</p>
+              <h3 className="font-display font-black text-white text-xl border-none leading-tight">{dailyTip.translations[language].title}</h3>
+              <p className="text-gray-400 text-sm mt-4 leading-relaxed italic font-medium opacity-80">{dailyTip.translations[language].content}</p>
+              
+              <div className="mt-6 pt-6 border-t border-white/5 flex items-center justify-between">
+                <span className="text-[9px] font-black text-gray-600 uppercase tracking-widest italic">{t.refresh_tips}</span>
+                <div className="flex gap-1">
+                  {[0, 1, 2].map(i => (
+                    <div key={i} className={`w-1 h-1 rounded-full ${i === tipIndex % 3 ? 'bg-brand-primary' : 'bg-gray-700'}`} />
+                  ))}
+                </div>
+              </div>
             </div>
           </motion.div>
         </div>
@@ -898,9 +1535,9 @@ function CheckupView({ onAddLog, language }: { onAddLog: (log: { symptoms: strin
       </div>
 
       <div className="space-y-4">
-        <label className="block text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] mb-2">{t.other_symptom}</label>
+        <label className="block text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] mb-2">{t.note_label}</label>
         <textarea 
-          placeholder="..."
+          placeholder={t.note_placeholder}
           rows={3}
           className="w-full px-5 py-4 rounded-[1.5rem] border border-white/5 focus:ring-2 focus:ring-brand-primary focus:outline-none bg-gray-800/40 text-white text-sm font-medium leading-relaxed"
           value={notes}
@@ -946,23 +1583,126 @@ function CheckupView({ onAddLog, language }: { onAddLog: (log: { symptoms: strin
 function EducationView({ language, weeksPregnant }: { language: Language, weeksPregnant: number }) {
   const t = translations[language];
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [tipIndex, setTipIndex] = useState(0);
 
   const currentTrimester = weeksPregnant <= 13 ? 1 : weeksPregnant <= 26 ? 2 : 3;
   const categories = ['nutrition', 'exercise', 'warning_signs', 'baby_growth', 'hygiene', 'mental_health'];
   
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [aiTip, setAiTip] = useState<{title: string, content: string} | null>(null);
+
   const filteredArticles = EDUCATION_ARTICLES.filter(a => 
     (!selectedCategory || a.category === selectedCategory) &&
     (!a.trimester || a.trimester === currentTrimester)
   );
 
+  const generateAIAdvice = async () => {
+    setIsGenerating(true);
+    setAiTip(null); // Reset
+    try {
+      const resp = await fetch('/api/generate-advice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trimester: currentTrimester, language })
+      });
+      const data = await resp.json();
+      if (data.title) setAiTip(data);
+    } catch (e) {
+      console.error("AI Advice failed", e);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Rotation logic for the education view too
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTipIndex(prev => (prev + 1) % Math.max(1, filteredArticles.length));
+    }, 5 * 60 * 1000); // 5 minutes
+    return () => clearInterval(interval);
+  }, [filteredArticles.length]);
+
+  const refreshTips = () => {
+    setTipIndex(Math.floor(Math.random() * filteredArticles.length));
+  };
+
+  const featuredTip = filteredArticles[tipIndex] || filteredArticles[0];
+
   return (
     <div className="p-6 space-y-8 pb-32">
-      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>
-        <h2 className="text-3xl font-display font-black text-white border-none leading-tight">{t.guide_maternel}</h2>
-        <p className="text-gray-500 text-sm mt-1 font-medium italic">{t.know_protect} ({t.trimester} {currentTrimester})</p>
+      <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex justify-between items-end">
+        <div>
+          <h2 className="text-3xl font-display font-black text-white border-none leading-tight">{t.guide_maternel}</h2>
+          <p className="text-gray-500 text-sm mt-1 font-medium italic">{t.know_protect} ({t.trimester} {currentTrimester})</p>
+        </div>
+        <button 
+          onClick={refreshTips}
+          className="p-3 bg-white/5 rounded-2xl text-brand-primary hover:bg-brand-primary hover:text-gray-900 transition-all active:scale-90 border border-white/10"
+        >
+          <RefreshCw size={20} />
+        </button>
       </motion.div>
 
+      {/* AI Fresh Advice Modalish Display */}
+      {aiTip && (
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9, y: 30 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          className="bg-white rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden ring-4 ring-brand-primary/20 mb-8"
+        >
+          <div className="absolute top-4 right-4 flex items-center gap-2 px-3 py-1 rounded-full bg-brand-primary/10 border border-brand-primary/20">
+            <span className="text-[8px] font-black text-brand-primary uppercase tracking-[0.2em]">{t.who_label}</span>
+          </div>
+          <div className="space-y-4">
+            <div className="w-12 h-12 bg-brand-primary/20 rounded-2xl flex items-center justify-center text-brand-primary">
+              <Sparkles size={24} />
+            </div>
+            <h3 className="text-xl font-display font-black text-gray-900 leading-tight">{aiTip.title}</h3>
+            <p className="text-gray-600 font-medium leading-relaxed">{aiTip.content}</p>
+            <button 
+              onClick={() => setAiTip(null)}
+              className="px-6 py-2 rounded-full border-2 border-gray-100 text-gray-400 font-bold text-xs hover:bg-gray-50 transition-colors"
+            >
+              {t.back}
+            </button>
+          </div>
+          <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-brand-primary/5 rounded-full blur-2xl" />
+        </motion.div>
+      )}
+
+      {/* Featured Rotating Advice */}
+      {featuredTip && (
+        <motion.div 
+          key={featuredTip.id}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="relative bg-gradient-to-br from-brand-primary/20 to-gray-800/40 rounded-[2.5rem] border border-brand-primary/30 p-8 overflow-hidden group shadow-2xl"
+        >
+           <div className="relative z-10 flex flex-col md:flex-row gap-8 items-center">
+              {featuredTip.imageUrl && (
+                <div className="w-full md:w-48 h-48 rounded-[2rem] overflow-hidden shrink-0 border-4 border-white/5">
+                  <img src={featuredTip.imageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt="Tip" referrerPolicy="no-referrer" />
+                </div>
+              )}
+              <div className="space-y-4">
+                <span className="inline-block px-4 py-1.5 rounded-full bg-brand-primary text-gray-900 text-[10px] font-black uppercase tracking-widest">{t[featuredTip.category as keyof typeof t] || featuredTip.category}</span>
+                <h3 className="text-2xl font-display font-black text-white leading-tight">{featuredTip.translations[language].title}</h3>
+                <p className="text-gray-400 text-lg leading-relaxed font-medium">{featuredTip.translations[language].content}</p>
+              </div>
+           </div>
+           <div className="absolute top-0 right-0 w-32 h-32 bg-brand-primary/10 rounded-full blur-3xl -mr-16 -mt-16" />
+        </motion.div>
+      )}
+
       <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar">
+        <button 
+          onClick={generateAIAdvice}
+          disabled={isGenerating}
+          className="shrink-0 px-6 py-4 rounded-2xl bg-brand-primary text-gray-900 font-black text-[10px] uppercase tracking-widest shadow-lg shadow-brand-primary/20 flex items-center gap-2 hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+        >
+          <Sparkles size={14} className={isGenerating ? "animate-spin" : ""} />
+          {isGenerating ? t.generating : t.generate_ai_advice}
+        </button>
         <button 
           onClick={() => setSelectedCategory(null)}
           className={`px-4 py-2 rounded-full text-[10px] font-black tracking-widest uppercase shrink-0 transition-all ${!selectedCategory ? 'bg-brand-primary text-gray-900 shadow-lg' : 'bg-white/5 text-gray-400 border border-white/10'}`}
@@ -994,7 +1734,7 @@ function EducationView({ language, weeksPregnant }: { language: Language, weeksP
             >
               {article.imageUrl && (
                 <div className="h-40 overflow-hidden">
-                  <img src={article.imageUrl} alt={article.title} className="w-full h-full object-cover opacity-60 group-hover:scale-110 transition-transform duration-700" referrerPolicy="no-referrer" />
+                  <img src={article.imageUrl} alt={article.translations[language].title} className="w-full h-full object-cover opacity-60 group-hover:scale-110 transition-transform duration-700" referrerPolicy="no-referrer" />
                 </div>
               )}
               <div className="p-8 flex-1">
@@ -1014,7 +1754,7 @@ function EducationView({ language, weeksPregnant }: { language: Language, weeksP
   );
 }
 
-function ProfileView({ patient, logs, onLogout, language }: { patient: Patient, logs: CheckupLog[], onLogout: () => void, language: Language }) {
+function ProfileView({ patient, logs, onLogout, language, onTabChange }: { patient: Patient, logs: CheckupLog[], onLogout: () => void, language: Language, onTabChange: (tab: any) => void }) {
   const t = translations[language];
   const [showQR, setShowQR] = useState(false);
   const hospital = HOSPITALS.find(h => h.id === patient.assignedHospitalId);
@@ -1025,20 +1765,27 @@ function ProfileView({ patient, logs, onLogout, language }: { patient: Patient, 
     n: patient.name, 
     p: patient.phone, 
     w: patient.weeksPregnant,
-    l: logs.slice(0, 3).map(l => ({ d: l.date, s: l.status, a: l.aiAnalysis })) 
-  });
+      l: logs.slice(0, 3).map(l => ({ 
+        d: l.date, 
+        s: l.status, 
+        a: l.aiAnalysis ? l.aiAnalysis.substring(0, 80) + '...' : '' 
+      })) 
+    });
   
   const encodedData = btoa(encodeURIComponent(stringifyData).replace(/%([0-9A-F]{2})/g, (match, p1) => String.fromCharCode(parseInt(p1, 16))));
   const recordLink = `${window.location.origin}${window.location.pathname}?record=${encodedData}`;
 
   return (
-    <div className="p-6 space-y-8 pb-32 max-w-2xl mx-auto">
+    <div className="p-4 md:p-8 space-y-8 pb-32 max-w-6xl mx-auto w-full">
+      {/* Profil Header Adaptive */}
       <motion.div 
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="flex flex-col items-center text-center"
+        className="flex flex-col lg:flex-row lg:items-start items-center gap-10 bg-gray-800/20 p-8 md:p-12 rounded-[3.5rem] border border-white/5 shadow-2xl relative overflow-hidden"
       >
-        <div className="w-28 h-28 bg-white p-2 rounded-full flex items-center justify-center mb-6 ring-4 ring-brand-primary/20 shadow-2xl relative">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-brand-primary/5 rounded-full blur-3xl -mr-32 -mt-32" />
+        
+        <div className="w-32 h-32 md:w-48 md:h-48 bg-white p-2 rounded-full flex items-center justify-center shrink-0 ring-8 ring-brand-primary/10 shadow-2xl relative z-10 transition-transform hover:scale-105 duration-700">
           <div className="w-full h-full rounded-full overflow-hidden">
             <img 
               src="https://plus.unsplash.com/premium_photo-1675713430635-424a132e4785?auto=format&fit=crop&q=80&w=200" 
@@ -1050,92 +1797,250 @@ function ProfileView({ patient, logs, onLogout, language }: { patient: Patient, 
           <motion.div 
             animate={{ scale: [1, 1.2, 1] }}
             transition={{ repeat: Infinity, duration: 2 }}
-            className="absolute -bottom-1 -right-1 w-10 h-10 bg-brand-primary rounded-xl border-4 border-gray-900 flex items-center justify-center text-gray-900"
+            className="absolute -bottom-1 -right-1 w-12 h-12 bg-brand-primary rounded-2xl border-4 border-gray-900 flex items-center justify-center text-gray-900 shadow-xl"
           >
-            <Heart size={20} fill="currentColor" />
+            <Heart size={24} fill="currentColor" />
           </motion.div>
         </div>
-        <div className="flex items-center gap-3">
-          <h2 className="text-2xl font-display font-black text-white border-none tracking-tight">{patient.name}</h2>
-          <ShieldCheck size={20} className="text-brand-primary" />
+
+        <div className="flex-1 space-y-6 text-center lg:text-left relative z-10 w-full">
+          <div className="space-y-4">
+             <div className="flex flex-col lg:flex-row lg:items-center gap-4 justify-center lg:justify-start">
+               <h2 className="text-3xl md:text-5xl font-display font-black text-white border-none tracking-tight leading-none">{patient.name}</h2>
+               <div className="w-fit mx-auto lg:mx-0">
+                  <span className="inline-flex items-center gap-2 bg-brand-primary/20 text-brand-primary text-[10px] font-black px-4 py-2 rounded-full border border-brand-primary/30 uppercase tracking-[0.2em] shadow-lg whitespace-nowrap">
+                  <ShieldCheck size={14} /> {t.followup_active}
+                </span>
+               </div>
+             </div>
+             <p className="text-[12px] font-black text-gray-500 uppercase tracking-[0.4em] italic opacity-80">{patient.phone}</p>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-6 mt-8">
+             <div className="bg-gray-900/60 p-4 md:p-5 rounded-[2rem] border border-white/5 flex flex-col items-center lg:items-start">
+                <Calendar className="text-brand-primary mb-2" size={20} />
+                <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">{t.journey}</p>
+                <p className="text-lg md:text-xl font-black text-white leading-none whitespace-nowrap">{patient.weeksPregnant} {t.weeks}</p>
+             </div>
+             <div className="bg-gray-900/60 p-4 md:p-5 rounded-[2rem] border border-white/5 flex flex-col items-center lg:items-start max-w-full overflow-hidden">
+                <MapPin className="text-blue-400 mb-2" size={20} />
+                <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1 truncate w-full">{t.medical_record}</p>
+                <p className="text-[11px] md:text-[12px] font-black text-white truncate w-full uppercase">{hospital?.name}</p>
+             </div>
+             <div className="bg-brand-primary p-4 md:p-5 rounded-[2rem] flex flex-col items-center lg:items-start group cursor-pointer hover:shadow-lg shadow-brand-primary/20 transition-all col-span-2 md:col-span-1" onClick={() => setShowQR(true)}>
+                <QrCode className="text-gray-900 mb-2 group-hover:scale-110 transition-transform" size={20} />
+                <p className="text-[9px] font-black text-gray-900/60 uppercase tracking-widest mb-1">{t.digital_pass}</p>
+                <p className="text-[10px] md:text-[11px] font-black text-gray-900 uppercase tracking-widest">{t.show_qr}</p>
+             </div>
+          </div>
         </div>
-        <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] mt-2 italic">{patient.phone}</p>
-        
-        <span className="mt-4 inline-flex items-center gap-2 bg-brand-primary/10 text-brand-primary text-[10px] font-black px-4 py-1.5 rounded-full border border-brand-primary/20 uppercase tracking-[0.2em] shadow-sm">
-          <ShieldCheck size={14} /> Suivi Actif
-        </span>
       </motion.div>
 
-      <div className="space-y-4">
-        {[
-          { icon: MapPin, label: "Centre Médical", value: hospital?.name, sub: hospital?.location, color: "text-brand-primary", bg: "bg-brand-primary/5" },
-          { icon: Phone, label: "Urgence SOS", value: hospital?.emergencyContact, sub: "Disponible 24h/24", color: "text-red-400", bg: "bg-red-400/5" }
-        ].map((item, i) => (
-          <motion.div 
-            key={i}
-            whileHover={{ x: 5 }}
-            className="bg-gray-800/40 p-6 rounded-[2rem] flex items-center gap-5 shadow-sm border border-white/5 group"
-          >
-            <div className={`${item.bg} p-4 rounded-2xl ${item.color} group-hover:scale-110 transition-transform`}>
-              <item.icon size={24} />
-            </div>
-            <div className="flex-1">
-              <p className="text-[9px] font-black text-gray-500 uppercase tracking-[0.3em] mb-1 italic">{item.label}</p>
-              <p className="font-black text-white text-base leading-none border-none">{item.value}</p>
-              <p className="text-[10px] text-gray-400 font-medium mt-1 opacity-60 tracking-wider uppercase leading-none">{item.sub}</p>
-            </div>
-          </motion.div>
-        ))}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 w-full">
+        {/* Left Column: Stats & Tools */}
+        <div className="xl:col-span-2 space-y-8">
+           <div className="flex items-center justify-between px-4">
+              <h4 className="text-[10px] font-black uppercase text-gray-500 tracking-[0.4em] italic">{t.tools}</h4>
+              <button 
+                onClick={() => {
+                  const hospital = HOSPITALS.find(h => h.id === (patient as any).assignedHospitalId);
+                  if (hospital) window.location.href = `tel:${hospital.emergencyContact}`;
+                }}
+                className="text-[9px] md:text-[10px] font-black text-red-400 uppercase tracking-widest flex items-center gap-2 bg-red-400/10 px-4 py-2 rounded-full border border-red-400/20"
+              >
+                <Phone size={12} /> {t.emergency}
+              </button>
+           </div>
+           
+           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-2 gap-4 h-fit">
+              <KickCounterCard t={t} />
+              
+              <div className="bg-gray-800/20 p-6 rounded-[2.5rem] border border-white/5 flex flex-col items-center justify-center text-center group hover:bg-white/5 transition-colors aspect-square lg:aspect-auto">
+                <div className="w-12 h-12 bg-blue-400/10 text-blue-400 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg">
+                  <Activity size={24} />
+                </div>
+                <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1 italic">{t.weight_track}</p>
+                <p className="text-xl md:text-2xl font-black text-white">{patient.weight} kg</p>
+              </div>
+
+              <div className="bg-gray-800/20 p-6 rounded-[2.5rem] border border-white/5 flex flex-col items-center justify-center text-center group hover:bg-white/5 transition-colors aspect-square lg:aspect-auto">
+                <div className="w-12 h-12 bg-red-400/10 text-red-400 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg">
+                  <Heart size={24} />
+                </div>
+                <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1 italic">{t.bp_track}</p>
+                <p className="text-xl md:text-2xl font-black text-white">12/8</p>
+              </div>
+
+              <div className="bg-gray-800/20 p-6 rounded-[2.5rem] border border-white/5 flex flex-col items-center justify-center text-center opacity-40 aspect-square lg:aspect-auto">
+                <div className="w-12 h-12 bg-purple-400/10 text-purple-400 rounded-2xl flex items-center justify-center mb-4">
+                  <Clock size={24} />
+                </div>
+                <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1 italic">{t.contractions}</p>
+                <p className="text-sm font-black text-white italic">{t.soon}</p>
+              </div>
+           </div>
+
+           <div className="space-y-4">
+              <h4 className="text-[10px] font-black uppercase text-gray-500 tracking-[0.4em] px-4 italic">{t.medical_file}</h4>
+              <div className="bg-gray-800/20 p-8 rounded-[3rem] border border-white/5 flex items-center justify-between group cursor-pointer hover:bg-white/5 transition-colors" onClick={() => onTabChange('record')}>
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-brand-primary/10 rounded-2xl flex items-center justify-center text-brand-primary group-hover:scale-110 transition-transform">
+                    <History size={24} />
+                  </div>
+                  <div>
+                    <h5 className="text-sm font-black text-white uppercase tracking-widest">{t.medical_record}</h5>
+                    <p className="text-[10px] text-gray-500 font-bold opacity-60 uppercase">{t.see_details}</p>
+                  </div>
+                </div>
+                <ChevronRight size={20} className="text-gray-500" />
+              </div>
+           </div>
+
+           <div className="space-y-4">
+              <h4 className="text-[10px] font-black uppercase text-gray-500 tracking-[0.4em] px-4 italic">{t.medical_history}</h4>
+              <div className="space-y-3">
+                {logs.length === 0 ? (
+                  <div className="bg-gray-800/20 p-12 rounded-[3.5rem] border border-dashed border-white/5 text-center">
+                    <p className="text-sm text-gray-600 italic font-medium">{t.no_logs}</p>
+                  </div>
+                ) : (
+                  logs.map((log) => (
+                    <motion.div 
+                      key={log.id} 
+                      className="bg-gray-800/30 p-6 md:p-8 rounded-[3rem] border border-white/5 hover:bg-gray-800/50 transition-all group"
+                    >
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                         <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{new Date(log.date).toLocaleDateString(language === 'FR' ? 'fr-FR' : 'sw-KE')}</span>
+                         <span className={`w-fit px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-[0.2em] shadow-lg ${
+                             log.status === 'critical' ? 'bg-red-400 text-gray-900' : 
+                             log.status === 'warning' ? 'bg-yellow-400 text-gray-900' : 
+                             'bg-green-400 text-gray-900'
+                          }`}>
+                            {log.status === 'stable' ? t.stable : log.status === 'warning' ? t.vigilance : t.action}
+                         </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2 mb-6">
+                        {log.symptoms.map(s => (
+                          <span key={s} className="bg-white/5 px-4 py-2 rounded-xl text-[10px] font-bold text-gray-400 border border-white/10 group-hover:bg-white/10 transition-colors uppercase tracking-widest leading-none">{s}</span>
+                        ))}
+                      </div>
+                      <div className="bg-gray-900/40 p-6 rounded-[2rem] relative overflow-hidden">
+                         <BrainCircuit size={40} className="absolute right-[-10px] bottom-[-10px] text-white opacity-5" />
+                         <p className="text-xs md:text-sm text-gray-400 leading-relaxed font-medium relative z-10">{log.aiAnalysis}</p>
+                      </div>
+                    </motion.div>
+                  ))
+                )}
+              </div>
+           </div>
+        </div>
+
+        {/* Right Column: Pass QR Section */}
+        <div className="space-y-8">
+           <h4 className="text-[10px] font-black uppercase text-gray-500 tracking-[0.4em] px-4 italic">{t.digital_pass}</h4>
+           
+           <div className="bg-gray-800/20 p-5 rounded-[3.5rem] border border-white/5 shadow-2xl relative overflow-hidden group">
+              <div className="absolute inset-0 bg-gradient-to-br from-brand-primary/5 via-transparent to-transparent opacity-50 transition-opacity group-hover:opacity-100" />
+              
+              <div className="relative z-10 space-y-4">
+                <button 
+                  onClick={() => setShowQR(!showQR)}
+                  className={`w-full py-6 rounded-[2.5rem] font-black flex items-center justify-center gap-4 transition-all duration-500 text-sm tracking-widest ${
+                    showQR ? 'bg-white text-gray-900 shadow-2xl scale-[1.02]' : 'bg-brand-primary text-gray-900 shadow-xl shadow-brand-primary/20'
+                  }`}
+                >
+                  <QrCode size={24} />
+                  {showQR ? t.hide_fiche.toUpperCase() : t.pass_qr.toUpperCase()}
+                </button>
+
+                <AnimatePresence>
+                  {showQR && (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.9, height: 0 }}
+                      animate={{ opacity: 1, scale: 1, height: 'auto' }}
+                      exit={{ opacity: 0, scale: 0.9, height: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="bg-white p-8 md:p-12 rounded-[3.5rem] mt-4 flex flex-col items-center relative overflow-hidden group/qr shadow-inner">
+                        {/* Adaptive Professional Frame */}
+                        <div className="absolute inset-0 bg-brand-primary/5 opacity-0 group-hover/qr:opacity-100 transition-opacity pointer-events-none" />
+                        
+                        <div className="relative bg-white p-4 rounded-[2rem] shadow-2xl transition-all duration-700 hover:rotate-1 hover:scale-105 border-4 border-brand-primary/5">
+                           <QRCodeCanvas 
+                            value={recordLink} 
+                            size={220} 
+                            level="H" 
+                            className="max-w-full h-auto"
+                            imageSettings={{
+                                src: "https://cdn-icons-png.flaticon.com/512/3063/3063822.png", 
+                                height: 40,
+                                width: 40,
+                                excavate: true,
+                            }}
+                          />
+                          {/* Adaptive Corner Accents */}
+                          <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-brand-primary/40 rounded-tl-[1.5rem]" />
+                          <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-brand-primary/40 rounded-br-[1.5rem]" />
+                        </div>
+
+                        <div className="text-center space-y-4 mt-8 relative z-10 w-full">
+                          <div className="flex items-center justify-center gap-3">
+                            <span className="h-[1px] flex-1 bg-gray-100" />
+                            <p className="text-[10px] font-black text-gray-900 uppercase tracking-[0.4em] px-4 py-2 bg-brand-primary/10 rounded-full">{t.id_label}: {patient.id.toUpperCase()}</p>
+                            <span className="h-[1px] flex-1 bg-gray-100" />
+                          </div>
+                          <p className="text-[10px] md:text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] leading-relaxed max-w-[280px] mx-auto opacity-70 italic">
+                            {t.scan_info}
+                          </p>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+           </div>
+
+           <div className="bg-gray-800/20 p-8 md:p-10 rounded-[3.5rem] border border-white/5 space-y-10">
+              <div>
+                <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.4em] mb-6 italic">{t.medical_record}</p>
+                <div className="space-y-4">
+                   <div className="flex items-center gap-5 bg-gray-900/60 p-5 rounded-[2rem] border border-white/5 hover:bg-white/5 transition-all group">
+                      <div className="w-14 h-14 bg-brand-primary/10 rounded-2xl flex items-center justify-center text-brand-primary shadow-inner group-hover:scale-110 transition-transform">
+                         <MapPin size={28} />
+                      </div>
+                      <div className="flex-1 overflow-hidden">
+                         <p className="text-sm font-black text-white border-none leading-none truncate uppercase tracking-widest">{hospital?.name}</p>
+                         <p className="text-[10px] text-gray-500 font-bold mt-2 opacity-60 uppercase">{hospital?.location}</p>
+                      </div>
+                   </div>
+                   
+                   <button 
+                     onClick={() => window.location.href = `tel:${hospital?.emergencyContact}`}
+                     className="w-full flex items-center gap-5 bg-red-400/5 p-5 rounded-[2rem] border border-red-400/10 hover:bg-red-400/10 transition-all group"
+                   >
+                      <div className="w-14 h-14 bg-red-400/10 rounded-2xl flex items-center justify-center text-red-400 shadow-inner group-hover:animate-bounce">
+                         <Phone size={28} />
+                      </div>
+                      <div className="flex-1 text-left">
+                         <p className="text-sm font-black text-white border-none leading-none uppercase tracking-widest">{t.emergency_contact}</p>
+                         <p className="text-[10px] text-gray-500 font-bold mt-2 opacity-60 uppercase">{hospital?.emergencyContact}</p>
+                      </div>
+                   </button>
+                </div>
+              </div>
+
+              <motion.button 
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={onLogout}
+                className="w-full py-5 rounded-[2rem] text-[10px] font-black text-gray-600 uppercase tracking-[0.5em] flex items-center justify-center gap-3 hover:bg-red-400/10 hover:text-red-400 transition-all border border-white/5 shadow-lg"
+              >
+                <LogOut size={16} className="opacity-50" />
+                {t.logout}
+              </motion.button>
+           </div>
+        </div>
       </div>
-
-      <div className="py-4 space-y-4">
-        <motion.button 
-          whileTap={{ scale: 0.98 }}
-          onClick={() => setShowQR(!showQR)}
-          className={`w-full py-5 rounded-[2rem] font-black flex items-center justify-center gap-3 shadow-2xl transition-all duration-300 ${
-            showQR ? 'bg-white text-gray-900 border-none' : 'bg-gray-800 border border-white/10 text-white'
-          }`}
-        >
-          <QrCode size={20} />
-          <span className="uppercase tracking-[0.2em]">{showQR ? t.hide_fiche : t.pass_qr}</span>
-        </motion.button>
-
-        <motion.button 
-          onClick={onLogout}
-          className="w-full py-4 rounded-[2rem] text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] flex items-center justify-center gap-2 hover:text-red-400 transition-colors"
-        >
-          <LogOut size={14} />
-          {t.logout}
-        </motion.button>
-      </div>
-
-      <AnimatePresence>
-        {showQR && (
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.8, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.8, y: 20 }}
-            className="bg-white p-10 rounded-[3rem] border-[4px] border-brand-primary flex flex-col items-center shadow-2xl relative"
-          >
-             <div className="absolute top-4 left-0 right-0 flex justify-center">
-                <span className="bg-brand-primary text-gray-900 text-[8px] font-black px-4 py-1 rounded-full uppercase tracking-widest">{t.digital_health_pass}</span>
-             </div>
-            <div className="bg-white p-4 rounded-[2rem] shadow-inner mb-2">
-               <QRCodeCanvas 
-                value={recordLink} 
-                size={200} 
-                level="M"
-                includeMargin={false}
-                className="max-w-full h-auto"
-              />
-            </div>
-            <div className="mt-8 text-center space-y-2">
-              <p className="text-[10px] font-black text-gray-900 uppercase tracking-[0.2em]">Uzazi ID : {patient.id.toUpperCase()}</p>
-              <p className="text-[9px] font-bold text-gray-400 max-w-[220px] leading-relaxed italic uppercase tracking-wider">{t.scan_info}</p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
@@ -1145,82 +2050,139 @@ function RecordView({ patient, logs, language, onBack }: { patient: Patient, log
   const hospital = HOSPITALS.find(h => h.id === patient.assignedHospitalId);
 
   return (
-    <div className="p-6 space-y-8 bg-gray-900 min-h-screen">
-      <header className="flex items-center justify-between gap-4">
-        <button onClick={onBack} className="p-3 bg-white/5 rounded-2xl text-white hover:bg-white/10">
+    <div className="p-4 md:p-8 space-y-8 bg-gray-900 min-h-screen">
+      <header className="flex items-center justify-between gap-4 max-w-4xl mx-auto w-full">
+        <button onClick={onBack} className="p-3 bg-white/5 rounded-2xl text-white hover:bg-white/10 transition-colors shadow-lg border border-white/5">
           <ArrowLeft size={20} />
         </button>
-        <h2 className="text-xl font-display font-black text-white">{t.medical_record}</h2>
-        <div className="w-10" />
+        <h2 className="text-xl md:text-2xl font-display font-black text-white uppercase tracking-widest">{t.medical_record}</h2>
+        <div className="w-10 md:w-12 h-10 md:h-12 bg-brand-primary rounded-2xl flex items-center justify-center text-gray-900 shadow-xl">
+           <Quote size={20} fill="currentColor" />
+        </div>
       </header>
 
-      <div className="bg-white rounded-[3rem] p-8 text-gray-900 shadow-2xl shadow-black/50">
-        <div className="flex items-center gap-4 mb-8">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 overflow-hidden">
+      <div className="bg-white rounded-[3rem] p-8 md:p-12 text-gray-900 shadow-2xl shadow-black/50 max-w-4xl mx-auto w-full relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-gray-50 rounded-bl-[5rem]" />
+        
+        <div className="flex flex-col md:flex-row items-center md:items-start gap-8 mb-12 relative z-10">
+          <div className="w-24 h-24 md:w-32 md:h-32 bg-gray-100 rounded-[2.5rem] flex items-center justify-center text-gray-400 overflow-hidden ring-8 ring-gray-50 shadow-inner">
              <img 
                src="https://plus.unsplash.com/premium_photo-1675713430635-424a132e4785?auto=format&fit=crop&q=80&w=200" 
                className="w-full h-full object-cover" 
                referrerPolicy="no-referrer" 
              />
           </div>
-          <div>
-            <h3 className="text-2xl font-black">{patient.name}</h3>
-            <p className="text-xs font-bold text-gray-400">{patient.phone}</p>
+          <div className="text-center md:text-left space-y-2">
+            <h3 className="text-3xl md:text-5xl font-display font-black tracking-tight leading-none">{patient.name}</h3>
+            <p className="text-[12px] font-black text-gray-400 uppercase tracking-[0.4em] italic">{patient.phone}</p>
+            <div className="pt-4 flex flex-wrap justify-center md:justify-start gap-2">
+               <span className="bg-gray-100 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-gray-500 border border-gray-200">{t.id_label}: {patient.id.toUpperCase()}</span>
+               <span className="bg-green-500/10 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-green-600 border border-green-500/20">{t.followup_active}</span>
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 mb-8">
-           <div className="bg-gray-100/50 p-6 rounded-[2rem]">
-              <p className="text-[8px] font-black uppercase text-gray-400 tracking-widest mb-1">{t.weeks}</p>
-              <p className="text-xl font-black text-gray-900">{patient.weeksPregnant}</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
+           <div className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100">
+              <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest mb-2">{t.weeks}</p>
+              <p className="text-2xl font-black text-gray-900 leading-none">{patient.weeksPregnant}</p>
            </div>
-           <div className="bg-gray-100/50 p-6 rounded-[2rem]">
-              <p className="text-[8px] font-black uppercase text-gray-400 tracking-widest mb-1">DPA</p>
-              <p className="text-xl font-black text-gray-900">{new Date(patient.dueDate).toLocaleDateString()}</p>
+           <div className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100">
+              <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest mb-2">{t.weight}</p>
+              <p className="text-2xl font-black text-gray-900 leading-none">{patient.weight} kg</p>
+           </div>
+           <div className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100">
+              <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest mb-2">{t.dpa_label}</p>
+              <p className="text-lg font-black text-gray-900 leading-none uppercase tracking-tight">{new Date(patient.dueDate).toLocaleDateString()}</p>
+           </div>
+           <div className="bg-brand-primary p-6 rounded-[2rem] shadow-lg shadow-brand-primary/20">
+              <p className="text-[9px] font-black uppercase text-gray-900/60 tracking-widest mb-2">{t.risk}</p>
+              <p className="text-2xl font-black text-gray-900 leading-none uppercase tracking-tighter">{t.normal}</p>
            </div>
         </div>
 
-        <div className="space-y-6">
-           <div className="border-b border-gray-100 pb-4">
-              <h4 className="text-[10px] font-black uppercase text-brand-primary tracking-widest mb-2">{t.medical_record}</h4>
-              <p className="text-sm font-bold text-gray-800">{hospital?.name}</p>
-              <p className="text-[10px] text-gray-400 font-medium">{hospital?.location}</p>
+        <div className="space-y-12">
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+              <div className="space-y-4">
+                 <div className="flex items-center gap-3 mb-2">
+                    <div className="w-8 h-8 bg-brand-primary/20 rounded-xl flex items-center justify-center text-brand-primary">
+                       <MapPin size={16} />
+                    </div>
+                    <h4 className="text-[11px] font-black uppercase text-gray-900 tracking-[0.2em]">{t.medical_record}</h4>
+                 </div>
+                 <div className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100">
+                    <p className="text-sm font-black text-gray-900 uppercase tracking-widest">{hospital?.name}</p>
+                    <p className="text-[11px] text-gray-400 font-bold mt-2 opacity-80 uppercase leading-relaxed">{hospital?.location}</p>
+                 </div>
+              </div>
+
+              <div className="space-y-4">
+                 <div className="flex items-center gap-3 mb-2">
+                    <div className="w-8 h-8 bg-red-400/20 rounded-xl flex items-center justify-center text-red-500">
+                       <Phone size={16} />
+                    </div>
+                    <h4 className="text-[11px] font-black uppercase text-gray-900 tracking-[0.2em]">{t.emergency_contact}</h4>
+                 </div>
+                 <div className="bg-red-500/5 p-6 rounded-[2rem] border border-red-500/10">
+                    <p className="text-sm font-black text-gray-900 uppercase tracking-widest">{t.direct_line}</p>
+                    <p className="text-[11px] text-red-500 font-black mt-2 uppercase tracking-widest">{hospital?.emergencyContact}</p>
+                 </div>
+              </div>
            </div>
 
-           <div className="space-y-4">
-              <h4 className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-2">{t.medical_history}</h4>
+           <div className="space-y-6">
+              <div className="flex items-center gap-3 mb-2">
+                 <div className="w-8 h-8 bg-blue-400/20 rounded-xl flex items-center justify-center text-blue-500">
+                    <History size={16} />
+                 </div>
+                 <h4 className="text-[11px] font-black uppercase text-gray-900 tracking-[0.2em]">{t.medical_history}</h4>
+              </div>
+              
               {logs.length === 0 ? (
-                <p className="text-xs text-gray-400 italic">{t.no_logs}</p>
+                <div className="bg-gray-50 p-12 rounded-[3rem] border border-dashed border-gray-200 text-center">
+                  <p className="text-sm text-gray-400 italic font-bold">{t.no_logs}</p>
+                </div>
               ) : (
                 <div className="space-y-4">
                   {logs.map((log) => (
-                    <div key={log.id} className="bg-gray-100/30 p-6 rounded-[2rem] border border-gray-100">
-                      <div className="flex justify-between items-center mb-4">
-                         <p className="text-[10px] font-black text-gray-400">{new Date(log.date).toLocaleDateString()}</p>
-                         <span className={`text-[8px] font-black px-3 py-1 rounded-full uppercase ${
-                            log.status === 'critical' ? 'bg-red-100 text-red-600' : 
-                            log.status === 'warning' ? 'bg-yellow-100 text-yellow-600' : 
-                            'bg-green-100 text-green-600'
+                    <div key={log.id} className="bg-gray-50 p-6 md:p-8 rounded-[2.5rem] border border-gray-100 hover:border-gray-300 transition-colors group">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                         <div className="flex items-center gap-3">
+                            <span className="w-2 h-2 rounded-full bg-brand-primary" />
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{new Date(log.date).toLocaleDateString()}</p>
+                         </div>
+                         <span className={`text-[9px] font-black px-5 py-2 rounded-full uppercase tracking-widest shadow-sm ${
+                            log.status === 'critical' ? 'bg-red-500 text-white' : 
+                            log.status === 'warning' ? 'bg-yellow-400 text-gray-900' : 
+                            'bg-green-500 text-white'
                          }`}>
                             {log.status === 'stable' ? t.stable : log.status === 'warning' ? t.vigilance : t.action}
                          </span>
                       </div>
-                      <div className="flex flex-wrap gap-2 mb-4">
+                      <div className="flex flex-wrap gap-2 mb-6">
                         {log.symptoms.map(s => (
-                          <span key={s} className="bg-white px-3 py-1 rounded-lg text-[9px] font-bold text-gray-600 border border-gray-200">{s}</span>
+                          <span key={s} className="bg-white px-4 py-2 rounded-xl text-[10px] font-black text-gray-500 border border-gray-100 uppercase tracking-widest shadow-sm leading-none">{s}</span>
                         ))}
                       </div>
-                      <p className="text-xs text-gray-600 italic leading-relaxed">{log.aiAnalysis}</p>
-                      {log.notes && (
-                         <div className="mt-3 p-3 bg-white/50 rounded-xl border border-gray-100">
-                            <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest">{t.patient_notes}</p>
-                            <p className="text-xs text-gray-500">{log.notes}</p>
-                         </div>
-                      )}
+                      <div className="bg-white p-6 rounded-[1.5rem] border border-gray-100 shadow-inner relative overflow-hidden">
+                         <BrainCircuit size={40} className="absolute right-[-10px] bottom-[-10px] text-gray-100" />
+                         <p className="text-xs md:text-sm text-gray-600 italic leading-relaxed font-medium relative z-10">{log.aiAnalysis}</p>
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
+           </div>
+        </div>
+
+        <div className="mt-16 pt-8 border-t border-gray-100 text-center">
+           <p className="text-[10px] font-black text-gray-300 uppercase tracking-[0.6em] mb-4">{t.generated_by}</p>
+           <div className="flex justify-center gap-4">
+              <div className="w-8 h-[2px] bg-gray-100 mt-4" />
+              <div className="w-12 h-12 bg-gray-50 p-2 rounded-xl">
+                 <ShieldCheck size={32} className="text-gray-100" />
+              </div>
+              <div className="w-8 h-[2px] bg-gray-100 mt-4" />
            </div>
         </div>
       </div>

@@ -5,19 +5,22 @@ export const HOSPITALS: Hospital[] = [
     id: 'h1',
     name: 'Hôpital Provincial de Bukavu',
     location: 'Bukavu, Sud-Kivu',
-    emergencyContact: '+243 812 345 678',
+    phone: '+243 812 345 678',
+    emergencyContact: '+243 812 000 111',
   },
   {
     id: 'h2',
     name: 'Hôpital de Panzi',
     location: 'Ibanda, Bukavu',
-    emergencyContact: '+243 821 987 654',
+    phone: '+243 821 987 654',
+    emergencyContact: '+243 821 000 222',
   },
   {
     id: 'h3',
     name: 'Centre de Santé de Ciriri',
     location: 'Ciriri, Bukavu',
-    emergencyContact: '+243 855 123 456',
+    phone: '+243 855 123 456',
+    emergencyContact: '+243 855 000 333',
   },
 ];
 
@@ -26,7 +29,7 @@ export const EDUCATION_ARTICLES: EducationalContent[] = [
     id: '1',
     category: 'nutrition',
     trimester: 1,
-    imageUrl: 'https://images.unsplash.com/photo-1543339308-43e59d6b73a6?auto=format&fit=crop&q=80&w=800',
+    imageUrl: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&q=80&w=800', // Salad/Greens
     translations: {
       FR: { title: 'Acide Folique et Sombé', content: 'Mangez du Sombé (feuilles de manioc). C\'est riche en fer et en acide folique, ce qui aide le cerveau de bébé à bien grandir.' },
       SW: { title: 'Asidi Foliki na Sombe', content: 'Kula Sombe (majani ya mihogo). Ina madini ya chuma na asidi foliki inayosaidia ubongo wa mtoto kukua vizuri.' },
@@ -37,7 +40,7 @@ export const EDUCATION_ARTICLES: EducationalContent[] = [
     id: '2',
     category: 'nutrition',
     trimester: 2,
-    imageUrl: 'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?auto=format&fit=crop&q=80&w=800',
+    imageUrl: 'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?auto=format&fit=crop&q=80&w=800', // Fish
     translations: {
       FR: { title: 'Le Calcium des Sambaza', content: 'Les petits poissons du Lac Kivu sont parfaits pour fortifier les os de bébé. Mangez-en souvent avec votre Bugali.' },
       SW: { title: 'Kalsiamu ya Sambaza', content: 'Samaki wadogo wa Ziwa Kivu ni wazuri kwa kuimarisha mifupa ya mtoto. Kula mara kwa mara na Bugali.' },
@@ -47,7 +50,7 @@ export const EDUCATION_ARTICLES: EducationalContent[] = [
   {
     id: '3',
     category: 'warning_signs',
-    imageUrl: 'https://images.unsplash.com/photo-1584036561566-baf8f5f1b144?auto=format&fit=crop&q=80&w=800',
+    imageUrl: 'https://images.unsplash.com/photo-1505751172876-fa1923c5c528?auto=format&fit=crop&q=80&w=800', // Medical stethoscope/clinic
     translations: {
       FR: { title: 'Gros maux de tête', content: 'Si vous avez mal à la tête très fort et que votre vue devient bizarre, allez vite à l\'hôpital. C\'est peut-être la tension.' },
       SW: { title: 'Maumivu makali ya kichwa', content: 'Ukisikia kichwa kinauma sana na uonaji unakuwa wa ajabu, nenda hospitali haraka. Inaweza kuwa presha.' },
@@ -58,7 +61,7 @@ export const EDUCATION_ARTICLES: EducationalContent[] = [
     id: '4',
     category: 'exercise',
     trimester: 2,
-    imageUrl: 'https://images.unsplash.com/photo-1476480848526-5788a4a3ffcc?auto=format&fit=crop&q=80&w=800',
+    imageUrl: 'https://images.unsplash.com/photo-1518611012118-2969c6a2c7a7?auto=format&fit=crop&q=80&w=800', // Fitness/walking
     translations: {
       FR: { title: 'Marche matinale', content: 'Marcher 20 minutes le matin aide à réduire les gonflements des pieds et vous donne de la force.' },
       SW: { title: 'Kutembea asubuhi', content: 'Kutembea dakika 20 asubuhi kunasaidia kupunguza kuvimba kwa miguu na kukupa nguvu.' },
@@ -69,7 +72,7 @@ export const EDUCATION_ARTICLES: EducationalContent[] = [
     id: '5',
     category: 'baby_growth',
     trimester: 3,
-    imageUrl: 'https://images.unsplash.com/photo-1515488042361-ee00e0ddd4e4?auto=format&fit=crop&q=80&w=800',
+    imageUrl: 'https://images.unsplash.com/photo-1527529482837-4698179dc6ce?auto=format&fit=crop&q=80&w=800', // Baby hands/caring
     translations: {
       FR: { title: 'Bébé vous entend', content: 'À ce stade, bébé reconnaît votre voix. Parlez-lui ou chantez-lui des chansons douces pour le rassurer.' },
       SW: { title: 'Mtoto anakusikia', content: 'Kufikia sasa, mtoto anatambua sauti yako. Ongea naye au muimbie nyimbo laini ili kumtuliza.' },
@@ -79,7 +82,7 @@ export const EDUCATION_ARTICLES: EducationalContent[] = [
   {
     id: '6',
     category: 'hygiene',
-    imageUrl: 'https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?auto=format&fit=crop&q=80&w=800',
+    imageUrl: 'https://images.unsplash.com/photo-1547448415-e9f5b28e570d?auto=format&fit=crop&q=80&w=800', // Hands/cleaning
     translations: {
       FR: { title: 'Dents et Gencives', content: 'La grossesse fragilise les gencives. Brossez-vous les dents doucement pour éviter les petites infections.' },
       SW: { title: 'Meno na Fizi', content: 'Ujauzito unadhoofisha fizi. Piga mswaki kwa upole ili kuepuka maambukizi madogo.' },
@@ -90,7 +93,7 @@ export const EDUCATION_ARTICLES: EducationalContent[] = [
     id: '7',
     category: 'nutrition',
     trimester: 3,
-    imageUrl: 'https://images.unsplash.com/photo-1550583724-1255818c0533?auto=format&fit=crop&q=80&w=800',
+    imageUrl: 'https://images.unsplash.com/photo-1490818387583-1baba5e638af?auto=format&fit=crop&q=80&w=800', // Fruit
     translations: {
       FR: { title: 'Fruits et Vitamines', content: 'Papaye, mangue et bananes de chez nous vous donnent de l\'énergie pour préparer l\'accouchement.' },
       SW: { title: 'Matunda na Vitamini', content: 'Papai, mango na ndizi za hapa kwetu hukupa nguvu ya kujiandaa na kujifungua.' },
@@ -100,7 +103,7 @@ export const EDUCATION_ARTICLES: EducationalContent[] = [
   {
     id: '8',
     category: 'mental_health',
-    imageUrl: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&q=80&w=800',
+    imageUrl: 'https://images.unsplash.com/photo-1499209974431-9dac3adaf471?auto=format&fit=crop&q=80&w=800', // Calm nature
     translations: {
       FR: { title: 'Repos et Calme', content: 'Si vous vous sentez fatiguée ou triste, parlez à une amie ou à votre maman. Le moral compte beaucoup.' },
       SW: { title: 'Pumzika na Utulie', content: 'Ukihisi umechoka au una huzuni, ongea na rafiki au mama yako. Hali yako ya moyo ni muhimu.' },
@@ -110,7 +113,7 @@ export const EDUCATION_ARTICLES: EducationalContent[] = [
   {
     id: '9',
     category: 'nutrition',
-    imageUrl: 'https://images.unsplash.com/photo-1551248429-40975aa4de74?auto=format&fit=crop&q=80&w=800',
+    imageUrl: 'https://images.unsplash.com/photo-1547592166-23ac45744acd?auto=format&fit=crop&q=80&w=800', // Beans/healthy food
     translations: {
       FR: { title: 'Les Haricots (Maranas)', content: 'Riches en fibres, les haricots aident à éviter la constipation qui est fréquente pendant la grossesse.' },
       SW: { title: 'Maharage (Maranas)', content: 'Yakiwa na nyuzi nyingi, maharage husaidia kuepuka kufunga choo ambako ni kawaida wakati wa ujauzito.' },
@@ -163,7 +166,7 @@ export const EDUCATION_ARTICLES: EducationalContent[] = [
     id: '14',
     category: 'mental_health',
     trimester: 2,
-    imageUrl: 'https://images.unsplash.com/photo-1516627145497-ae6968895b74?auto=format&fit=crop&q=80&w=200',
+    imageUrl: 'https://images.unsplash.com/photo-1516627145497-ae6968895b74?auto=format&fit=crop&q=80&w=800',
     translations: {
       FR: { title: 'Rêver de bébé', content: 'Commencez à imaginer votre vie avec bébé. Cela crée un lien fort avant même la naissance.' },
       SW: { title: 'Waza kuhusu mtoto', content: 'Anza kufikiria maisha yako na mtoto. Hii inatengeneza uhusiano wenye nguvu kabla hata hajazaliwa.' },
