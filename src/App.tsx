@@ -884,7 +884,11 @@ export default function App() {
       }
     } catch (e: any) {
       console.error("Login error:", e);
-      setError("Erreur de connexion. Vérifiez votre configuration Firebase.");
+      let errorMsg = "Erreur de connexion. Veuillez réessayer.";
+      if (e.message && e.message.includes("permission-denied")) {
+        errorMsg = "Accès refusé. Veuillez vérifier les règles de sécurité de votre base de données Firebase.";
+      }
+      setError(errorMsg);
     } finally {
       setIsLoggingIn(false);
     }
@@ -1015,7 +1019,11 @@ export default function App() {
     } catch (e: any) {
       console.error("Registration error:", e);
       handleFirestoreError(e, 'create', `users/${slug}`);
-      setError("Erreur d'inscription. Veuillez réessayer.");
+      let errorMsg = "Erreur d'inscription. Veuillez vérifier votre connexion.";
+      if (e.message && e.message.includes("permission-denied")) {
+        errorMsg = "Création impossible : L'accès à la base de données Firebase est restreint par les règles de sécurité.";
+      }
+      setError(errorMsg);
     } finally {
       setIsRegistering(false);
     }
@@ -1078,7 +1086,7 @@ export default function App() {
               <Heart size={24} fill="currentColor" />
             </div>
             <div>
-              <h1 className="text-xl font-display font-black text-white border-none leading-none tracking-tighter">UZAZI</h1>
+              <h1 className="text-xl font-display font-black text-white border-none leading-none tracking-tighter">UZAZI SALAMA</h1>
               <p className="text-[8px] font-black tracking-[0.3em] text-brand-primary/60 uppercase">{t.app_tagline}</p>
             </div>
           </div>
@@ -1260,7 +1268,10 @@ function Login({ onLogin, language, isLoading, error }: { onLogin: (name: string
 
         <form onSubmit={handleSubmit} className="bg-white/5 p-8 rounded-[3rem] border border-white/10 space-y-6 backdrop-blur-xl">
           {error && (
-            <p className="text-red-400 text-xs font-bold text-center animate-shake">{error}</p>
+            <div className="bg-red-500/10 border border-red-500/30 p-4 rounded-2xl flex flex-col items-center justify-center gap-1 animate-shake">
+              <span className="text-red-400 font-bold uppercase tracking-widest text-[10px]">Erreur</span>
+              <span className="text-red-200 text-xs text-center">{error}</span>
+            </div>
           )}
 
           <div className="space-y-2">
@@ -1456,7 +1467,12 @@ function Onboarding({ onRegister, language, initialName, isLoading, error: paren
       </AnimatePresence>
 
       <div className="mt-8">
-        {displayError && <p className="text-red-400 text-center text-[10px] font-bold mb-4 uppercase tracking-widest">{displayError}</p>}
+        {displayError && (
+          <div className="bg-red-500/10 border border-red-500/30 p-4 rounded-2xl mb-6 flex flex-col items-center justify-center gap-1 animate-shake">
+            <span className="text-red-400 font-bold uppercase tracking-widest text-[10px]">Erreur</span>
+            <span className="text-red-200 text-xs text-center">{displayError}</span>
+          </div>
+        )}
         <div className="flex gap-4">
           {step > 1 && (
             <button 
