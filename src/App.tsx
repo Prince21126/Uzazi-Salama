@@ -938,7 +938,8 @@ export default function App() {
             id: decoded.id,
             name: decoded.n,
             phone: decoded.p,
-            weight: 65, // Default for shared record
+            weight: decoded.we || 65, // Using transmitted weight or default
+            bloodPressure: decoded.bp || undefined,
             weeksPregnant: decoded.w,
             lastPeriodDate: new Date().toISOString(), // Mocked as it's not in the small QR
             dueDate: new Date().toISOString(),
@@ -1051,6 +1052,14 @@ export default function App() {
       };
 
       await addDoc(collection(db, 'users', patient.id, 'logs'), logData);
+
+      // Mettre à jour le poids et la tension dans le profil
+      if (newLog.weight || newLog.bloodPressure) {
+        const updateData: any = { updatedAt: serverTimestamp() };
+        if (newLog.weight) updateData.weight = newLog.weight;
+        if (newLog.bloodPressure) updateData.bloodPressure = newLog.bloodPressure;
+        await updateDoc(doc(db, 'users', patient.id), updateData);
+      }
     } catch (e: any) {
       console.error("Failed to save log", e);
       handleFirestoreError(e, 'create', `users/${patient.id}/logs`);
@@ -2039,12 +2048,14 @@ function ProfileView({ patient, logs, onLogout, language, onTabChange }: { patie
     n: patient.name, 
     p: patient.phone, 
     w: patient.weeksPregnant,
-      l: logs.slice(0, 3).map(l => ({ 
-        d: l.date, 
-        s: l.status, 
-        a: l.aiAnalysis ? l.aiAnalysis.substring(0, 80) + '...' : '' 
-      })) 
-    });
+    we: patient.weight,
+    bp: patient.bloodPressure,
+    l: logs.slice(0, 3).map(l => ({ 
+      d: l.date, 
+      s: l.status, 
+      a: l.aiAnalysis ? l.aiAnalysis.substring(0, 80) + '...' : '' 
+    })) 
+  });
   
   const encodedData = btoa(encodeURIComponent(stringifyData).replace(/%([0-9A-F]{2})/g, (match, p1) => String.fromCharCode(parseInt(p1, 16))));
   const recordLink = `${window.location.origin}${window.location.pathname}?record=${encodedData}`;
@@ -2139,7 +2150,7 @@ function ProfileView({ patient, logs, onLogout, language, onTabChange }: { patie
                   <Heart size={24} />
                 </div>
                 <p className="text-[10px] font-black text-brand-primary/70 uppercase tracking-widest mb-1 italic">{t.bp_track}</p>
-                <p className="text-xl md:text-2xl font-black text-white">12/8</p>
+                <p className="text-xl md:text-2xl font-black text-white">{patient.bloodPressure || "—"}</p>
               </div>
 
               <div className="bg-white/10/20 p-6 rounded-[2.5rem] border border-white/5 flex flex-col items-center justify-center text-center opacity-40 aspect-square lg:aspect-auto">
@@ -2333,7 +2344,7 @@ function RecordView({ patient, logs, language, onBack }: { patient: Patient, log
         </div>
       </header>
 
-      <div className="bg-white rounded-[3rem] p-8 md:p-12 text-gray-900 shadow-2xl shadow-black/50 max-w-4xl mx-auto w-full relative overflow-hidden">
+      <div className="bg-white rounded-[2.5rem] md:rounded-[3rem] p-6 md:p-12 text-gray-900 shadow-2xl shadow-black/50 max-w-4xl mx-auto w-full relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-gray-50 rounded-bl-[5rem]" />
         
         <div className="flex flex-col md:flex-row items-center md:items-start gap-8 mb-12 relative z-10">
@@ -2344,28 +2355,32 @@ function RecordView({ patient, logs, language, onBack }: { patient: Patient, log
             <h3 className="text-3xl md:text-5xl font-display font-black tracking-tight leading-none">{patient.name}</h3>
             <p className="text-[12px] font-black text-brand-primary uppercase tracking-[0.4em] italic">{patient.phone}</p>
             <div className="pt-4 flex flex-wrap justify-center md:justify-start gap-2">
-               <span className="bg-gray-100 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-brand-primary/70 border border-gray-200">{t.id_label}: {patient.id.toUpperCase()}</span>
-               <span className="bg-green-500/10 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-green-600 border border-green-500/20">{t.followup_active}</span>
+               <span className="bg-gray-100 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-brand-primary/70 border border-gray-200 break-all">{t.id_label}: {patient.id.toUpperCase()}</span>
+               <span className="bg-green-500/10 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-green-600 border border-green-500/20 whitespace-nowrap">{t.followup_active}</span>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
-           <div className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100">
-              <p className="text-[9px] font-black uppercase text-brand-primary tracking-widest mb-2">{t.weeks}</p>
-              <p className="text-2xl font-black text-gray-900 leading-none">{patient.weeksPregnant}</p>
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4 mb-12">
+           <div className="bg-gray-50 p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] border border-gray-100">
+              <p className="text-[8px] md:text-[9px] font-black uppercase text-brand-primary tracking-widest mb-1 md:mb-2">{t.weeks}</p>
+              <p className="text-xl md:text-2xl font-black text-gray-900 leading-none">{patient.weeksPregnant}</p>
            </div>
-           <div className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100">
-              <p className="text-[9px] font-black uppercase text-brand-primary tracking-widest mb-2">{t.weight}</p>
-              <p className="text-2xl font-black text-gray-900 leading-none">{patient.weight} kg</p>
+           <div className="bg-gray-50 p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] border border-gray-100">
+              <p className="text-[8px] md:text-[9px] font-black uppercase text-brand-primary tracking-widest mb-1 md:mb-2">{t.weight}</p>
+              <p className="text-xl md:text-2xl font-black text-gray-900 leading-none">{patient.weight} kg</p>
            </div>
-           <div className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100">
-              <p className="text-[9px] font-black uppercase text-brand-primary tracking-widest mb-2">{t.dpa_label}</p>
-              <p className="text-lg font-black text-gray-900 leading-none uppercase tracking-tight">{new Date(patient.dueDate).toLocaleDateString()}</p>
+           <div className="bg-gray-50 p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] border border-gray-100">
+              <p className="text-[8px] md:text-[9px] font-black uppercase text-brand-primary tracking-widest mb-1 md:mb-2">{t.bp_track || "TENSION"}</p>
+              <p className="text-xl md:text-2xl font-black text-gray-900 leading-none">{patient.bloodPressure || "—"}</p>
            </div>
-           <div className="bg-brand-primary p-6 rounded-[2rem] shadow-lg shadow-brand-primary/20">
-              <p className="text-[9px] font-black uppercase text-gray-900/60 tracking-widest mb-2">{t.risk}</p>
-              <p className="text-2xl font-black text-gray-900 leading-none uppercase tracking-tighter">{t.normal}</p>
+           <div className="bg-gray-50 p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] border border-gray-100">
+              <p className="text-[8px] md:text-[9px] font-black uppercase text-brand-primary tracking-widest mb-1 md:mb-2">{t.dpa_label}</p>
+              <p className="text-sm md:text-lg font-black text-gray-900 leading-none uppercase tracking-tight">{new Date(patient.dueDate).toLocaleDateString()}</p>
+           </div>
+           <div className="bg-brand-primary p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] shadow-lg shadow-brand-primary/20 col-span-2 lg:col-span-1">
+              <p className="text-[8px] md:text-[9px] font-black uppercase text-gray-900/60 tracking-widest mb-1 md:mb-2">{t.risk}</p>
+              <p className="text-xl md:text-2xl font-black text-gray-900 leading-none uppercase tracking-tighter">{t.normal}</p>
            </div>
         </div>
 

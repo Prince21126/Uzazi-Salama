@@ -7,6 +7,7 @@ export interface Patient {
   email: string;
   phone: string;
   weight: number;
+  bloodPressure?: string;
   lastPeriodDate: string; // ISO string
   dueDate: string; // ISO string
   weeksPregnant: number;
