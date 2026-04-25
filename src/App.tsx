@@ -597,7 +597,7 @@ function NavButton({ active, icon: Icon, label, onClick }: { active: boolean, ic
   return (
     <button 
       onClick={onClick}
-      className={`flex flex-col items-center justify-center p-2 transition-all duration-300 ${active ? 'text-brand-primary scale-110' : 'text-brand-primary/70 hover:text-brand-primary'}`}
+      className={`flex flex-col items-center justify-center p-2 cursor-pointer transition-all duration-300 ${active ? 'text-brand-primary scale-110' : 'text-brand-primary/70 hover:text-brand-primary'}`}
     >
       <Icon size={18} className={active ? 'fill-brand-primary/20' : ''} />
       <span className="text-[10px] mt-1 font-black uppercase tracking-widest">{label}</span>
@@ -612,6 +612,7 @@ function AdminView({ language, db, logout }: { language: Language, db: any, logo
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'patients' | 'hospitals'>('overview');
   const [newHospital, setNewHospital] = useState({ name: '', location: '', phone: '' });
   const [newPatient, setNewPatient] = useState({ name: '', phone: '', lmp: '', hospitalId: '' });
+  const [expandedPatientId, setExpandedPatientId] = useState<string | null>(null);
 
   useEffect(() => {
     // Real-time patients
@@ -685,7 +686,7 @@ function AdminView({ language, db, logout }: { language: Language, db: any, logo
           </div>
           <button 
             onClick={logout}
-            className="px-6 py-3 bg-red-500/10 text-red-500 rounded-full font-black uppercase tracking-widest hover:bg-red-500/20 transition-all text-xs"
+            className="px-6 py-3 bg-red-500/10 text-red-500 rounded-full font-black uppercase tracking-widest hover:bg-red-500/20 transition-all text-xs cursor-pointer"
           >
             Déconnexion
           </button>
@@ -696,7 +697,7 @@ function AdminView({ language, db, logout }: { language: Language, db: any, logo
             <button
               key={tab}
               onClick={() => setActiveSubTab(tab as any)}
-              className={`px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
+              className={`px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap cursor-pointer ${
                 activeSubTab === tab ? 'bg-brand-primary text-gray-900' : 'bg-white/5 text-white'
               }`}
             >
@@ -739,9 +740,49 @@ function AdminView({ language, db, logout }: { language: Language, db: any, logo
                <h2 className="text-xl font-black text-white mb-6 uppercase tracking-widest">{t.all_patients}</h2>
                <div className="space-y-4">
                  {patients.map(p => (
-                   <div key={p.id} className="flex justify-between items-center p-4 bg-white/5 rounded-xl border border-white/5">
-                     <span className="font-bold text-white">{p.name || p.id}</span>
-                     <span className="text-xs text-white/50">{p.phone}</span>
+                   <div key={p.id} className="bg-white/5 rounded-xl border border-white/5 overflow-hidden">
+                     <div 
+                       className="flex justify-between items-center p-4 cursor-pointer hover:bg-white/10 transition-colors"
+                       onClick={() => setExpandedPatientId(expandedPatientId === p.id ? null : p.id)}
+                     >
+                       <span className="font-bold text-white">{p.name || p.id}</span>
+                       <div className="flex items-center gap-3">
+                         <span className="text-xs text-white/50">{p.phone}</span>
+                         <ChevronDown 
+                           size={16} 
+                           className={`text-white/50 transition-transform ${expandedPatientId === p.id ? 'rotate-180' : ''}`} 
+                         />
+                       </div>
+                     </div>
+                     <AnimatePresence>
+                       {expandedPatientId === p.id && (
+                         <motion.div
+                           initial={{ height: 0, opacity: 0 }}
+                           animate={{ height: "auto", opacity: 1 }}
+                           exit={{ height: 0, opacity: 0 }}
+                           className="bg-black/20 px-4 py-3 border-t border-white/5"
+                         >
+                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                             <div>
+                               <p className="text-white/40 font-bold uppercase tracking-wider mb-1">Téléphone</p>
+                               <p className="text-brand-primary">{p.phone}</p>
+                             </div>
+                             <div>
+                               <p className="text-white/40 font-bold uppercase tracking-wider mb-1">Hôpital</p>
+                               <p className="text-white">{hospitals.find(h => h.id === p.assignedHospitalId)?.name || 'Non assigné'}</p>
+                             </div>
+                             <div>
+                               <p className="text-white/40 font-bold uppercase tracking-wider mb-1">Semaines</p>
+                               <p className="text-white">{p.weeksPregnant} SG</p>
+                             </div>
+                             <div>
+                               <p className="text-white/40 font-bold uppercase tracking-wider mb-1">DPA</p>
+                               <p className="text-white">{new Date(p.dueDate).toLocaleDateString()}</p>
+                             </div>
+                           </div>
+                         </motion.div>
+                       )}
+                     </AnimatePresence>
                    </div>
                  ))}
                </div>
