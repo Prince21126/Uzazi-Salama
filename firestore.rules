@@ -1,31 +1,37 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Default deny
+    // Helpers
+    function isSignedIn() { return request.auth != null; }
+    function isAdmin() { return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true; }
+    function isValidUser(data) {
+        return data.name is string && data.email is string && data.language is string;                
+    }
+
+    // Default deny all
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Helpers
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isOwner(userId) {
-      return isSignedIn();
-    }
-
-    function isValidUser(data) {
-      return true;
-    }
-
+    // Users collection
     match /users/{userId} {
-      allow read: if true;
-      allow write: if true;
-      
+      allow list: if isSignedIn();
+      allow read: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isSignedIn() && isValidUser(request.resource.data);
+      allow update: if isSignedIn();
+
+      // User logs subcollection
       match /logs/{logId} {
-        allow read, write: if true;
+        allow read, write: if isSignedIn();
       }
+    }
+
+    // Hospitals collection
+    match /hospitals/{hospitalId} {
+      allow list: if isSignedIn();
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
     }
   }
 }

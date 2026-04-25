@@ -38,7 +38,7 @@ export async function analyzeSymptoms(log: { symptoms: string[], bloodPressure?:
     console.error("AI Analysis failed via proxy.", error);
     return { 
       status: 'critical', 
-      analysis: "L'analyse intelligente est temporairement indisponible. Veuillez consulter votre médecin immédiatement pour tout signe inquiétant. (Erreur technique: vérifiez la configuration de votre clé API dans les Secrets)" 
+      analysis: "L'analyse intelligente est temporairement indisponible. Veuillez consulter votre médecin immédiatement pour tout symptôme préoccupant."
     };
   }
 }

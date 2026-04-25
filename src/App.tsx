@@ -36,6 +36,7 @@ import {
   QrCode,
   LogOut,
   BrainCircuit,
+  Lightbulb,
   Bell
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -597,35 +598,64 @@ function NavButton({ active, icon: Icon, label, onClick }: { active: boolean, ic
       onClick={onClick}
       className={`flex flex-col items-center justify-center p-2 transition-all duration-300 ${active ? 'text-brand-primary scale-110' : 'text-brand-primary/70 hover:text-brand-primary'}`}
     >
-      <Icon size={22} className={active ? 'fill-brand-primary/20' : ''} />
+      <Icon size={18} className={active ? 'fill-brand-primary/20' : ''} />
       <span className="text-[10px] mt-1 font-black uppercase tracking-widest">{label}</span>
     </button>
   );
 }
 
-function AdminView({ language }: { language: Language }) {
+function AdminView({ language, db, logout }: { language: Language, db: any, logout: () => void }) {
   const t = translations[language];
-  const [patientsCount, setPatientsCount] = useState(0);
+  const [patients, setPatients] = useState<Patient[]>([]);
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'patients' | 'hospitals' | 'emergencies'>('overview');
+  const [newHospital, setNewHospital] = useState({ name: '', location: '', phone: '' });
 
   useEffect(() => {
-    // Local data only
-    setHospitals(HOSPITALS as any);
-  }, []);
+    // Real-time patients
+    const unsubPatients = onSnapshot(collection(db, 'users'), (snap) => {
+      setPatients(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Patient)));
+    }, (error) => {
+      handleFirestoreError(error, 'get', 'users');
+    });
+    
+    // Real-time hospitals
+    const unsubHospitals = onSnapshot(collection(db, 'hospitals'), (snap) => {
+      setHospitals(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Hospital)));
+    }, (error) => {
+      handleFirestoreError(error, 'get', 'hospitals');
+    });
+
+    return () => {
+      unsubPatients();
+      unsubHospitals();
+    };
+  }, [db]);
+
+  const handleAddHospital = async () => {
+    if (!newHospital.name || !newHospital.location) return;
+    await addDoc(collection(db, 'hospitals'), newHospital);
+    setNewHospital({ name: '', location: '', phone: '' });
+  };
 
   return (
     <div className="p-6 space-y-8 max-w-6xl mx-auto min-h-screen pb-32">
-       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white/10/20 p-8 rounded-[3rem] border border-white/5">
-          <div className="flex items-center gap-4">
-             <div className="w-16 h-16 bg-brand-primary rounded-[1.5rem] flex items-center justify-center text-gray-900 shadow-xl">
-                <ShieldCheck size={32} />
+       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/5 p-5 rounded-[1.5rem] border border-white/5 shadow-xl">
+          <div className="flex items-center gap-3">
+             <div className="w-10 h-10 bg-brand-primary rounded-[0.75rem] flex items-center justify-center text-gray-900">
+                <ShieldCheck size={20} />
              </div>
              <div>
-                <h2 className="text-3xl font-display font-black text-white border-none leading-none tracking-tight">{t.admin_title}</h2>
-                <p className="text-[11px] font-black text-brand-primary/70 uppercase tracking-widest mt-2">{t.access_granted}</p>
+                <h2 className="text-xl font-black text-white leading-none">{t.admin_title}</h2>
+                <p className="text-[9px] font-black text-brand-primary uppercase tracking-widest mt-1">{t.access_granted}</p>
              </div>
           </div>
+          <button 
+            onClick={logout}
+            className="px-6 py-3 bg-red-500/10 text-red-500 rounded-full font-black uppercase tracking-widest hover:bg-red-500/20 transition-all text-xs"
+          >
+            Déconnexion
+          </button>
        </header>
 
        <div className="flex gap-2 overflow-x-auto no-scrollbar py-2">
@@ -634,7 +664,7 @@ function AdminView({ language }: { language: Language }) {
               key={tab}
               onClick={() => setActiveSubTab(tab as any)}
               className={`px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
-                activeSubTab === tab ? 'bg-brand-primary text-gray-900 shadow-lg' : 'bg-white/5 text-brand-primary border border-white/10'
+                activeSubTab === tab ? 'bg-brand-primary text-gray-900' : 'bg-white/5 text-white'
               }`}
             >
               {t[`${tab}_management` as keyof typeof t] || t[tab as keyof typeof t] || tab}
@@ -643,48 +673,56 @@ function AdminView({ language }: { language: Language }) {
        </div>
 
        {activeSubTab === 'overview' && (
-         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            <div className="bg-white/10/40 p-8 rounded-[2.5rem] border border-white/5 shadow-xl">
-               <p className="text-[10px] font-black text-brand-primary/70 uppercase tracking-widest mb-4">{t.total_women}</p>
-               <h3 className="text-5xl font-black text-white leading-none">{patientsCount}</h3>
-               <div className="mt-6 flex items-center justify-between text-brand-primary">
-                  <span className="text-[10px] font-black uppercase tracking-widest">{t.reports}</span>
-                  <History size={20} />
-               </div>
+         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="bg-white/5 p-8 rounded-[2rem] border border-white/5">
+               <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-4">{t.total_women}</p>
+               <h3 className="text-6xl font-black text-white leading-none">{patients.length}</h3>
             </div>
-            
-            <div className="bg-white/10/40 p-8 rounded-[2.5rem] border border-white/5 shadow-xl">
-               <p className="text-[10px] font-black text-brand-primary/70 uppercase tracking-widest mb-4">{t.hospitals_management}</p>
-               <h3 className="text-5xl font-black text-white leading-none">{hospitals.length}</h3>
-               <div className="mt-6 flex items-center justify-between text-blue-400">
-                  <span className="text-[10px] font-black uppercase tracking-widest">{t.all}</span>
-                  <MapPin size={20} />
-               </div>
+            <div className="bg-white/5 p-8 rounded-[2rem] border border-white/5">
+               <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-4">{t.hospitals_management}</p>
+               <h3 className="text-6xl font-black text-white leading-none">{hospitals.length}</h3>
+            </div>
+         </div>
+       )}
+
+       {activeSubTab === 'patients' && (
+         <div className="bg-white/5 p-8 rounded-[2rem] border border-white/5">
+            <h2 className="text-xl font-black text-white mb-6 uppercase tracking-widest">{t.all_patients}</h2>
+            <div className="space-y-4">
+              {patients.map(p => (
+                <div key={p.id} className="flex justify-between items-center p-4 bg-white/5 rounded-xl border border-white/5">
+                  <span className="font-bold text-white">{p.name}</span>
+                  <span className="text-xs text-white/50">{p.id}</span>
+                </div>
+              ))}
             </div>
          </div>
        )}
 
        {activeSubTab === 'hospitals' && (
-         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {hospitals.map(h => (
-              <div key={h.id} className="bg-white/10/20 p-8 rounded-[3rem] border border-white/5 flex flex-col gap-6">
-                 <div className="flex justify-between items-start">
-                    <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-brand-primary">
-                       <MapPin size={24} />
-                    </div>
-                    <button className="p-2 hover:text-brand-primary"><Plus size={20} /></button>
-                 </div>
-                 <div>
-                    <h4 className="text-xl font-black text-white uppercase tracking-tight">{h.name}</h4>
-                    <p className="text-xs text-brand-primary/70 font-medium mt-1">{h.location}</p>
-                 </div>
-                 <div className="pt-4 border-t border-white/5 flex items-center gap-4 text-xs font-black text-brand-primary/70 tracking-widest">
-                    <Phone size={14} className="text-red-400" /> {h.phone}
-                 </div>
-              </div>
-            ))}
+         <div className="space-y-6">
+            <div className="bg-white/5 p-8 rounded-[2rem] border border-white/5">
+               <h2 className="text-xl font-black text-white mb-6 uppercase tracking-widest">Ajouter Hôpital</h2>
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <input placeholder="Nom" className="bg-white/10 p-4 rounded-xl text-white" value={newHospital.name} onChange={e => setNewHospital({...newHospital, name: e.target.value})} />
+                  <input placeholder="Lieu" className="bg-white/10 p-4 rounded-xl text-white" value={newHospital.location} onChange={e => setNewHospital({...newHospital, location: e.target.value})} />
+                  <input placeholder="Téléphone" className="bg-white/10 p-4 rounded-xl text-white" value={newHospital.phone} onChange={e => setNewHospital({...newHospital, phone: e.target.value})} />
+               </div>
+               <button onClick={handleAddHospital} className="mt-4 px-6 py-3 bg-brand-primary text-gray-900 rounded-xl font-black uppercase tracking-widest">Ajouter</button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {hospitals.map(h => (
+                <div key={h.id} className="bg-white/5 p-6 rounded-[2rem] border border-white/5">
+                   <h4 className="font-black text-white text-lg">{h.name}</h4>
+                   <p className="text-xs text-white/50">{h.location}</p>
+                   <p className="text-xs text-brand-primary mt-2">{h.phone}</p>
+                </div>
+              ))}
+            </div>
          </div>
        )}
+
     </div>
   );
 }
@@ -719,6 +757,8 @@ export default function App() {
         if (p.language) setLanguage(p.language as Language);
         localStorage.setItem('uzazi_patient', JSON.stringify(p));
       }
+    }, (error) => {
+      handleFirestoreError(error, 'get', `users/${patient.id}`);
     });
 
     // Sync logs
@@ -727,6 +767,8 @@ export default function App() {
       const logsData = snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as CheckupLog));
       setLogs(logsData);
       localStorage.setItem('uzazi_logs', JSON.stringify(logsData));
+    }, (error) => {
+      handleFirestoreError(error, 'get', `users/${patient.id}/logs`);
     });
 
     return () => {
@@ -870,8 +912,9 @@ export default function App() {
       const p = JSON.parse(saved);
       setPatient(p);
       setIsAdmin(!!p.isAdmin);
+      if (!!p.isAdmin) setActiveTab('admin');
     } else {
-      setShowOnboarding(true);
+      // Do nothing, let the user trigger onboarding via Login if necessary
     }
 
     const savedLogs = localStorage.getItem('uzazi_logs');
@@ -889,12 +932,13 @@ export default function App() {
     }
     setIsRegistering(true);
     setError(null);
+    const slug = slugify(name, { lower: true, strict: true });
     try {
-      const slug = slugify(name, { lower: true, strict: true });
       console.log('slug:', slug);
       const newPatient: Patient = {
         id: slug,
         name,
+        email: user.email || '',
         phone,
         weight: 65,
         lastPeriodDate: lmp,
@@ -937,6 +981,8 @@ export default function App() {
 
       const logData = {
         ...newLog,
+        bloodPressure: newLog.bloodPressure || null,
+        weight: newLog.weight || null,
         notes: newLog.notes || "",
         patientId: patient.id,
         date: new Date().toISOString(),
@@ -949,6 +995,7 @@ export default function App() {
     } catch (e: any) {
       console.error("Failed to save log", e);
       handleFirestoreError(e, 'create', `users/${patient.id}/logs`);
+      setError("Erreur lors de la sauvegarde du bilan. Veuillez réessayer.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -986,16 +1033,18 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-2 md:gap-4">
-             <button 
-              onClick={() => {
-                const hospital = HOSPITALS.find(h => h.id === (patient as any).assignedHospitalId);
-                if (hospital) window.location.href = `tel:${hospital.emergencyContact}`;
-              }}
-              className="bg-red-400/10 text-red-400 p-2.5 rounded-xl hover:bg-red-400/20 transition-colors shadow-lg"
-              title={(translations[language] as any).call_hospital}
-            >
-              <Phone size={18} />
-            </button>
+             {!isAdmin && (
+              <button 
+               onClick={() => {
+                 const hospital = HOSPITALS.find(h => h.id === (patient as any).assignedHospitalId);
+                 if (hospital) window.location.href = `tel:${hospital.emergencyContact}`;
+               }}
+               className="bg-red-400/10 text-red-400 p-2.5 rounded-xl hover:bg-red-400/20 transition-colors shadow-lg"
+               title={(translations[language] as any).call_hospital}
+             >
+               <Phone size={18} />
+             </button>
+             )}
 
             <div className="relative">
               <button 
@@ -1101,7 +1150,7 @@ export default function App() {
               transition={{ type: "spring", damping: 20, stiffness: 100 }}
               className="max-w-6xl mx-auto w-full"
             >
-              <AdminView language={language} />
+              <AdminView language={language} db={db} logout={googleLogout} />
             </motion.div>
           )}
           {activeTab === 'record' && (
@@ -1118,21 +1167,13 @@ export default function App() {
       </main>
 
       {/* Navigation Bar */}
-      {activeTab !== 'record' && (
+      {activeTab !== 'record' && !isAdmin && (
         <div className="sticky bottom-0 left-0 right-0 z-[100] p-4 flex justify-center pointer-events-none">
-          <nav className="max-w-lg w-full bg-gray-900/90 backdrop-blur-2xl border border-white/10 px-4 py-3 flex justify-between items-center rounded-[2rem] shadow-2xl pointer-events-auto">
-            <NavButton active={activeTab === 'home'} icon={Home} label={translations[language].home} onClick={() => setActiveTab('home')} />
-            <NavButton active={activeTab === 'checkup'} icon={Stethoscope} label={translations[language].suivi} onClick={() => setActiveTab('checkup')} />
-            <NavButton active={activeTab === 'education'} icon={BookOpen} label={translations[language].conseil} onClick={() => setActiveTab('education')} />
-            <NavButton active={activeTab === 'profile'} icon={User} label={translations[language].profil} onClick={() => setActiveTab('profile')} />
-            {isAdmin && (
-               <NavButton 
-                active={activeTab === 'admin'} 
-                icon={ShieldCheck} 
-                label="Admin" 
-                onClick={() => setActiveTab('admin')} 
-              />
-            )}
+          <nav className="max-w-lg w-full bg-gray-900/90 backdrop-blur-2xl border border-white/10 px-3 py-2 flex justify-between items-center rounded-[1.5rem] shadow-xl pointer-events-auto">
+                <NavButton active={activeTab === 'home'} icon={Home} label={translations[language].home} onClick={() => setActiveTab('home')} />
+                <NavButton active={activeTab === 'checkup'} icon={Stethoscope} label={translations[language].suivi} onClick={() => setActiveTab('checkup')} />
+                <NavButton active={activeTab === 'education'} icon={BookOpen} label={translations[language].conseil} onClick={() => setActiveTab('education')} />
+                <NavButton active={activeTab === 'profile'} icon={User} label={translations[language].profil} onClick={() => setActiveTab('profile')} />
           </nav>
         </div>
       )}
@@ -1229,10 +1270,10 @@ function Onboarding({ onRegister, language, initialName, isLoading, error: paren
     if (step === 2) {
       const lmpDate = new Date(formData.lmp);
       const today = new Date();
-      const oneYearAgo = new Date();
-      oneYearAgo.setFullYear(today.getFullYear() - 1);
+      const tenMonthsAgo = new Date();
+      tenMonthsAgo.setMonth(today.getMonth() - 10);
       
-      if (!formData.lmp || lmpDate > today || lmpDate < oneYearAgo || isNaN(lmpDate.getTime())) {
+      if (!formData.lmp || lmpDate > today || lmpDate < tenMonthsAgo || isNaN(lmpDate.getTime())) {
         setLocalError(t.invalid_date || "Date invalide");
         return;
       }
@@ -1604,12 +1645,10 @@ function HomeView({
             layout
             className="bg-white/10/40 rounded-[2.5rem] border border-white/5 overflow-hidden shadow-sm group hover:border-brand-primary/30 transition-all duration-500"
           >
-            <div className="relative">
-              {dailyTip.imageUrl && (
-                <img src={dailyTip.imageUrl} alt="Tip" className="w-full h-48 object-cover opacity-60 grayscale group-hover:grayscale-0 transition-all duration-700 hover:scale-105" referrerPolicy="no-referrer" />
-              )}
-              <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/40 to-transparent"></div>
-              <div className="absolute top-4 right-4">
+            <div className="relative bg-gray-800 flex items-center justify-center min-h-[192px] overflow-hidden">
+               <div className="absolute inset-0 bg-gradient-to-br from-brand-primary/10 to-transparent"></div>
+               <Lightbulb className="text-brand-primary opacity-20 transform group-hover:scale-110 group-hover:opacity-100 transition-all duration-700" size={80} />
+              <div className="absolute top-4 right-4 z-10">
                 <button 
                   onClick={refreshTip}
                   className="bg-white/10 backdrop-blur-md p-3 rounded-2xl text-white hover:bg-brand-primary hover:text-gray-900 transition-all active:scale-90 shadow-xl border border-white/10"
@@ -1659,9 +1698,9 @@ function CheckupView({ onAddLog, language }: { onAddLog: (log: { symptoms: strin
   const handleSubmit = () => {
     onAddLog({
       symptoms,
-      bloodPressure: bloodPressure || undefined,
-      weight: weight ? parseFloat(weight) : undefined,
-      notes: notes || undefined
+      bloodPressure: bloodPressure || null,
+      weight: weight ? parseFloat(weight) : null,
+      notes: notes || null
     });
   };
 
@@ -1846,11 +1885,10 @@ function EducationView({ language, weeksPregnant }: { language: Language, weeksP
           className="relative bg-gradient-to-br from-brand-primary/20 to-gray-800/40 rounded-[2.5rem] border border-brand-primary/30 p-8 overflow-hidden group shadow-2xl"
         >
            <div className="relative z-10 flex flex-col md:flex-row gap-8 items-center">
-              {featuredTip.imageUrl && (
-                <div className="w-full md:w-48 h-48 rounded-[2rem] overflow-hidden shrink-0 border-4 border-white/5">
-                  <img src={featuredTip.imageUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt="Tip" referrerPolicy="no-referrer" />
-                </div>
-              )}
+              <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-[2rem] bg-gray-900/50 flex items-center justify-center shrink-0 border-4 border-white/5 relative overflow-hidden group-hover:border-brand-primary/20 transition-colors duration-500">
+                <div className="absolute inset-0 bg-gradient-to-br from-brand-primary/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                <Lightbulb size={48} className="text-brand-primary z-10" />
+              </div>
               <div className="space-y-4">
                 <span className="inline-block px-4 py-1.5 rounded-full bg-brand-primary text-gray-900 text-[10px] font-black uppercase tracking-widest">{t[featuredTip.category as keyof typeof t] || featuredTip.category}</span>
                 <h3 className="text-2xl font-display font-black text-white leading-tight">{featuredTip.translations[language].title}</h3>
@@ -1899,11 +1937,6 @@ function EducationView({ language, weeksPregnant }: { language: Language, weeksP
               transition={{ delay: idx * 0.05 }}
               className="bg-white/10/40 rounded-[2.5rem] shadow-sm border border-white/5 relative overflow-hidden group flex flex-col"
             >
-              {article.imageUrl && (
-                <div className="h-40 overflow-hidden">
-                  <img src={article.imageUrl} alt={article.translations[language].title} className="w-full h-full object-cover opacity-60 group-hover:scale-110 transition-transform duration-700" referrerPolicy="no-referrer" />
-                </div>
-              )}
               <div className="p-8 flex-1">
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-6 shadow-lg shrink-0 ${
                   ['nutrition', 'baby_growth', 'hygiene'].includes(article.category) ? 'bg-brand-primary/20 text-brand-primary' : 'bg-red-500/10 text-red-400'
@@ -1953,13 +1986,8 @@ function ProfileView({ patient, logs, onLogout, language, onTabChange }: { patie
         <div className="absolute top-0 right-0 w-64 h-64 bg-brand-primary/5 rounded-full blur-3xl -mr-32 -mt-32" />
         
         <div className="w-32 h-32 md:w-48 md:h-48 bg-white p-2 rounded-full flex items-center justify-center shrink-0 ring-8 ring-brand-primary/10 shadow-2xl relative z-10 transition-transform hover:scale-105 duration-700">
-          <div className="w-full h-full rounded-full overflow-hidden">
-            <img 
-              src="https://plus.unsplash.com/premium_photo-1675713430635-424a132e4785?auto=format&fit=crop&q=80&w=200" 
-              alt="User" 
-              className="w-full h-full object-cover"
-              referrerPolicy="no-referrer"
-            />
+          <div className="w-full h-full rounded-full overflow-hidden bg-gray-100 flex items-center justify-center">
+            <User size={64} className="text-gray-400" />
           </div>
           <motion.div 
             animate={{ scale: [1, 1.2, 1] }}
@@ -2008,15 +2036,17 @@ function ProfileView({ patient, logs, onLogout, language, onTabChange }: { patie
         <div className="xl:col-span-2 space-y-8">
            <div className="flex items-center justify-between px-4">
               <h4 className="text-[10px] font-black uppercase text-brand-primary/70 tracking-[0.4em] italic">{t.tools}</h4>
-              <button 
-                onClick={() => {
-                  const hospital = HOSPITALS.find(h => h.id === (patient as any).assignedHospitalId);
-                  if (hospital) window.location.href = `tel:${hospital.emergencyContact}`;
-                }}
-                className="text-[9px] md:text-[10px] font-black text-red-400 uppercase tracking-widest flex items-center gap-2 bg-red-400/10 px-4 py-2 rounded-full border border-red-400/20"
-              >
-                <Phone size={12} /> {t.emergency}
-              </button>
+              {!patient.isAdmin && (
+                <button 
+                  onClick={() => {
+                    const hospital = HOSPITALS.find(h => h.id === (patient as any).assignedHospitalId);
+                    if (hospital) window.location.href = `tel:${hospital.emergencyContact}`;
+                  }}
+                  className="text-[9px] md:text-[10px] font-black text-red-400 uppercase tracking-widest flex items-center gap-2 bg-red-400/10 px-4 py-2 rounded-full border border-red-400/20"
+                >
+                  <Phone size={12} /> {t.emergency}
+                </button>
+              )}
            </div>
            
            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-2 gap-4 h-fit">
@@ -2233,11 +2263,7 @@ function RecordView({ patient, logs, language, onBack }: { patient: Patient, log
         
         <div className="flex flex-col md:flex-row items-center md:items-start gap-8 mb-12 relative z-10">
           <div className="w-24 h-24 md:w-32 md:h-32 bg-gray-100 rounded-[2.5rem] flex items-center justify-center text-brand-primary overflow-hidden ring-8 ring-gray-50 shadow-inner">
-             <img 
-               src="https://plus.unsplash.com/premium_photo-1675713430635-424a132e4785?auto=format&fit=crop&q=80&w=200" 
-               className="w-full h-full object-cover" 
-               referrerPolicy="no-referrer" 
-             />
+             <User size={48} className="text-brand-primary/50" />
           </div>
           <div className="text-center md:text-left space-y-2">
             <h3 className="text-3xl md:text-5xl font-display font-black tracking-tight leading-none">{patient.name}</h3>

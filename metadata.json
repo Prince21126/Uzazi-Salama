@@ -1,6 +1,6 @@
 {
   "name": "Uzazi Salama",
-  "description": "Plateforme numérique d'accompagnement prénatal pour les femmes enceintes au Sud-Kivu, offrant suivi personnalisé, détection d'anomalies et conseils santé.",
+  "description": "Plateforme numérique d'accompagnement prénatal pour les femmes enceintes au Sud-Kivu qui offre un suivi personnalisé, des conseils santé basés sur les standards OMS, ainsi qu'une interconnexion essentielle entre les mamans et les structures hospitalières pour la prévention des risques maternels et infantiles au quotidien.",
   "requestFramePermissions": [
     "camera"
   ],
