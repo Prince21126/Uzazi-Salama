@@ -43,6 +43,7 @@ import { QRCodeCanvas } from 'qrcode.react';
 import { Patient, HealthStatus, CheckupLog, Language, Hospital } from './types';
 import { HOSPITALS, EDUCATION_ARTICLES } from './constants';
 import { analyzeSymptoms } from './services/aiService';
+import slugify from 'slugify';
 import { db, auth } from './lib/firebase';
 import { useAuth } from './hooks/useAuth';
 import { 
@@ -554,18 +555,18 @@ function KickCounterCard({ t }: { t: any }) {
   const [isCounting, setIsCounting] = useState(false);
 
   return (
-    <div className="bg-gray-800/40 p-6 rounded-[2rem] shadow-sm border border-white/5 flex flex-col items-center justify-center text-center group h-full">
+    <div className="bg-white/10/40 p-6 rounded-[2rem] shadow-sm border border-white/5 flex flex-col items-center justify-center text-center group h-full">
       <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 transition-all duration-500 ${isCounting ? 'bg-brand-primary text-gray-900 animate-pulse scale-110 shadow-lg shadow-brand-primary/20' : 'bg-brand-primary/10 text-brand-primary'}`}>
         <Activity size={24} />
       </div>
-      <p className="text-[10px] font-black uppercase text-gray-500 tracking-[0.3em] mb-1 italic">{t.kick_counter}</p>
+      <p className="text-[10px] font-black uppercase text-brand-primary/70 tracking-[0.3em] mb-1 italic">{t.kick_counter}</p>
       <p className="text-2xl font-black text-white leading-none border-none">{kicks}</p>
       
       <div className="flex gap-2 mt-4">
         {!isCounting ? (
           <button 
             onClick={() => setIsCounting(true)}
-            className="text-[10px] font-black uppercase bg-white/5 px-4 py-2 rounded-xl text-gray-400 hover:bg-white/10 transition-colors"
+            className="text-[10px] font-black uppercase bg-white/5 px-4 py-2 rounded-xl text-brand-primary hover:bg-white/10 transition-colors"
           >
             {t.start_counting}
           </button>
@@ -594,7 +595,7 @@ function NavButton({ active, icon: Icon, label, onClick }: { active: boolean, ic
   return (
     <button 
       onClick={onClick}
-      className={`flex flex-col items-center justify-center p-2 transition-all duration-300 ${active ? 'text-brand-primary scale-110' : 'text-gray-500 hover:text-gray-300'}`}
+      className={`flex flex-col items-center justify-center p-2 transition-all duration-300 ${active ? 'text-brand-primary scale-110' : 'text-brand-primary/70 hover:text-brand-primary'}`}
     >
       <Icon size={22} className={active ? 'fill-brand-primary/20' : ''} />
       <span className="text-[10px] mt-1 font-black uppercase tracking-widest">{label}</span>
@@ -615,14 +616,14 @@ function AdminView({ language }: { language: Language }) {
 
   return (
     <div className="p-6 space-y-8 max-w-6xl mx-auto min-h-screen pb-32">
-       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-gray-800/20 p-8 rounded-[3rem] border border-white/5">
+       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white/10/20 p-8 rounded-[3rem] border border-white/5">
           <div className="flex items-center gap-4">
              <div className="w-16 h-16 bg-brand-primary rounded-[1.5rem] flex items-center justify-center text-gray-900 shadow-xl">
                 <ShieldCheck size={32} />
              </div>
              <div>
                 <h2 className="text-3xl font-display font-black text-white border-none leading-none tracking-tight">{t.admin_title}</h2>
-                <p className="text-[11px] font-black text-gray-500 uppercase tracking-widest mt-2">{t.access_granted}</p>
+                <p className="text-[11px] font-black text-brand-primary/70 uppercase tracking-widest mt-2">{t.access_granted}</p>
              </div>
           </div>
        </header>
@@ -633,7 +634,7 @@ function AdminView({ language }: { language: Language }) {
               key={tab}
               onClick={() => setActiveSubTab(tab as any)}
               className={`px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
-                activeSubTab === tab ? 'bg-brand-primary text-gray-900 shadow-lg' : 'bg-white/5 text-gray-400 border border-white/10'
+                activeSubTab === tab ? 'bg-brand-primary text-gray-900 shadow-lg' : 'bg-white/5 text-brand-primary border border-white/10'
               }`}
             >
               {t[`${tab}_management` as keyof typeof t] || t[tab as keyof typeof t] || tab}
@@ -643,8 +644,8 @@ function AdminView({ language }: { language: Language }) {
 
        {activeSubTab === 'overview' && (
          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            <div className="bg-gray-800/40 p-8 rounded-[2.5rem] border border-white/5 shadow-xl">
-               <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4">{t.total_women}</p>
+            <div className="bg-white/10/40 p-8 rounded-[2.5rem] border border-white/5 shadow-xl">
+               <p className="text-[10px] font-black text-brand-primary/70 uppercase tracking-widest mb-4">{t.total_women}</p>
                <h3 className="text-5xl font-black text-white leading-none">{patientsCount}</h3>
                <div className="mt-6 flex items-center justify-between text-brand-primary">
                   <span className="text-[10px] font-black uppercase tracking-widest">{t.reports}</span>
@@ -652,8 +653,8 @@ function AdminView({ language }: { language: Language }) {
                </div>
             </div>
             
-            <div className="bg-gray-800/40 p-8 rounded-[2.5rem] border border-white/5 shadow-xl">
-               <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4">{t.hospitals_management}</p>
+            <div className="bg-white/10/40 p-8 rounded-[2.5rem] border border-white/5 shadow-xl">
+               <p className="text-[10px] font-black text-brand-primary/70 uppercase tracking-widest mb-4">{t.hospitals_management}</p>
                <h3 className="text-5xl font-black text-white leading-none">{hospitals.length}</h3>
                <div className="mt-6 flex items-center justify-between text-blue-400">
                   <span className="text-[10px] font-black uppercase tracking-widest">{t.all}</span>
@@ -666,7 +667,7 @@ function AdminView({ language }: { language: Language }) {
        {activeSubTab === 'hospitals' && (
          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {hospitals.map(h => (
-              <div key={h.id} className="bg-gray-800/20 p-8 rounded-[3rem] border border-white/5 flex flex-col gap-6">
+              <div key={h.id} className="bg-white/10/20 p-8 rounded-[3rem] border border-white/5 flex flex-col gap-6">
                  <div className="flex justify-between items-start">
                     <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-brand-primary">
                        <MapPin size={24} />
@@ -675,9 +676,9 @@ function AdminView({ language }: { language: Language }) {
                  </div>
                  <div>
                     <h4 className="text-xl font-black text-white uppercase tracking-tight">{h.name}</h4>
-                    <p className="text-xs text-gray-500 font-medium mt-1">{h.location}</p>
+                    <p className="text-xs text-brand-primary/70 font-medium mt-1">{h.location}</p>
                  </div>
-                 <div className="pt-4 border-t border-white/5 flex items-center gap-4 text-xs font-black text-gray-500 tracking-widest">
+                 <div className="pt-4 border-t border-white/5 flex items-center gap-4 text-xs font-black text-brand-primary/70 tracking-widest">
                     <Phone size={14} className="text-red-400" /> {h.phone}
                  </div>
               </div>
@@ -691,7 +692,7 @@ function AdminView({ language }: { language: Language }) {
 // --- Main App Component ---
 
 export default function App() {
-  const { user, loading, login: googleLogin, logout: googleLogout } = useAuth();
+  const { user, loading, googleLogin, logout: googleLogout } = useAuth();
   const [patient, setPatient] = useState<Patient | null>(null);
   const [activeTab, setActiveTab] = useState<'home' | 'checkup' | 'education' | 'profile' | 'record' | 'admin'>('home');
   const [isAdmin, setIsAdmin] = useState(false);
@@ -707,10 +708,10 @@ export default function App() {
 
   // Logic to load data on mount
   useEffect(() => {
-    if (!user) return;
+    if (!user || !patient?.id) return;
 
     // Sync patient data
-    const unsubPatient = onSnapshot(doc(db, 'users', user.uid), (snap) => {
+    const unsubPatient = onSnapshot(doc(db, 'users', patient.id), (snap) => {
       if (snap.exists()) {
         const p = snap.data() as Patient;
         setPatient(p);
@@ -721,7 +722,7 @@ export default function App() {
     });
 
     // Sync logs
-    const q = query(collection(db, 'users', user.uid, 'logs'), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, 'users', patient.id, 'logs'), orderBy('createdAt', 'desc'));
     const unsubLogs = onSnapshot(q, (snap) => {
       const logsData = snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as CheckupLog));
       setLogs(logsData);
@@ -732,16 +733,65 @@ export default function App() {
       unsubPatient();
       unsubLogs();
     };
-  }, [user]);
+  }, [user, patient?.id]);
 
+  const [pendingName, setPendingName] = useState<string>('');
   const handleLogin = async (name: string) => {
+    const rawName = name.trim();
+    if (!rawName) return;
+
     setIsLoggingIn(true);
     setError(null);
     try {
-      await googleLogin();
+      console.log('handleLogin started with name:', rawName);
+      try {
+        if (!user) {
+          console.log('Not logged in, calling googleLogin');
+          await googleLogin();
+          console.log('googleLogin completed successfully, waiting for auth state');
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Delay to allow auth state update
+          console.log('Auth check:', auth.currentUser ? 'Auth' : 'No Auth');
+        } else {
+          console.log('User is already logged in');
+        }
+      } catch (authError: any) {
+        console.error('Auth error in handleLogin:', authError);
+        setError(authError.message);
+        setIsLoggingIn(false);
+        return;
+      }
+      
+      if (rawName.toLowerCase() === '@admin') {
+         console.log('Admin login detected');
+         setIsAdmin(true);
+         setActiveTab('admin');
+         setShowOnboarding(false);
+         setPatient({ id: '@admin', name: '@admin', isAdmin: true } as any);
+         return;
+      }
+      
+      const slug = slugify(rawName, { lower: true, strict: true });
+      console.log('Looking up user with slug:', slug);
+      const userDoc = await getDoc(doc(db, 'users', slug));
+      console.log('Lookup finished. Exists:', userDoc.exists());
+      
+      if (userDoc.exists()) {
+        const p = userDoc.data() as Patient;
+        p.id = slug;
+        setPatient(p);
+        setIsAdmin(!!p.isAdmin);
+        if (p.language) setLanguage(p.language as Language);
+        setShowOnboarding(false);
+        localStorage.setItem('uzazi_patient', JSON.stringify(p));
+        localStorage.setItem('uzazi_saved_name', rawName);
+      } else {
+        console.log('User does not exist, showing onboarding');
+        setPendingName(rawName);
+        setShowOnboarding(true);
+      }
     } catch (e: any) {
       console.error("Login error:", e);
-      setError("Erreur de connexion");
+      setError("Erreur de connexion. Vérifiez votre configuration Firebase.");
     } finally {
       setIsLoggingIn(false);
     }
@@ -766,7 +816,7 @@ export default function App() {
         setPatient(updatedPatient);
         localStorage.setItem('uzazi_patient', JSON.stringify(updatedPatient));
         
-        await updateDoc(doc(db, 'users', user.uid), {
+        await updateDoc(doc(db, 'users', updatedPatient.id), {
           language: lang,
           updatedAt: serverTimestamp()
         });
@@ -831,36 +881,46 @@ export default function App() {
   }, []);
 
   const handleRegister = async (name: string, phone: string, lmp: string, hospitalId: string) => {
-    if (!user) return;
+    console.log('handleRegister called', { name, phone, lmp, hospitalId, user: user?.uid });
+    if (!user) {
+      console.error('handleRegister: No user found');
+      setError("Erreur d'authentification. Veuillez vous reconnecter.");
+      return;
+    }
     setIsRegistering(true);
     setError(null);
     try {
+      const slug = slugify(name, { lower: true, strict: true });
+      console.log('slug:', slug);
       const newPatient: Patient = {
-        id: user.uid,
+        id: slug,
         name,
         phone,
-        weight: 65, // Default weight
+        weight: 65,
         lastPeriodDate: lmp,
         dueDate: calculateDueDate(lmp),
         weeksPregnant: calculateWeeksPregnant(lmp),
         assignedHospitalId: hospitalId,
         language: language,
-        isAdmin: user.email === 'princebamba2112@gmail.com',
+        isAdmin: false,
       };
       
-      await setDoc(doc(db, 'users', user.uid), {
+      console.log('Attempting to set doc:', `users/${slug}`);
+      await setDoc(doc(db, 'users', slug), {
         ...newPatient,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
+      console.log('Set doc successful');
       
       setPatient(newPatient);
       localStorage.setItem('uzazi_patient', JSON.stringify(newPatient));
+      localStorage.setItem('uzazi_saved_name', name);
       setShowOnboarding(false);
     } catch (e: any) {
       console.error("Registration error:", e);
-      handleFirestoreError(e, 'create', `users/${user.uid}`);
-      setError("Erreur d'inscription");
+      handleFirestoreError(e, 'create', `users/${slug}`);
+      setError("Erreur d'inscription. Veuillez réessayer.");
     } finally {
       setIsRegistering(false);
     }
@@ -877,17 +937,18 @@ export default function App() {
 
       const logData = {
         ...newLog,
-        patientId: user.uid,
+        notes: newLog.notes || "",
+        patientId: patient.id,
         date: new Date().toISOString(),
         status: aiResult.status as HealthStatus,
         aiAnalysis: aiResult.analysis,
         createdAt: serverTimestamp()
       };
 
-      await addDoc(collection(db, 'users', user.uid, 'logs'), logData);
+      await addDoc(collection(db, 'users', patient.id, 'logs'), logData);
     } catch (e: any) {
       console.error("Failed to save log", e);
-      handleFirestoreError(e, 'create', `users/${user.uid}/logs`);
+      handleFirestoreError(e, 'create', `users/${patient.id}/logs`);
     } finally {
       setIsAnalyzing(false);
     }
@@ -901,12 +962,12 @@ export default function App() {
     );
   }
 
-  if (!user || !patient) {
-    return <Login onLogin={handleLogin} language={language} isLoading={isLoggingIn} error={error} />;
+  if (showOnboarding) {
+    return <Onboarding onRegister={handleRegister} language={language} initialName={pendingName || ''} isLoading={isRegistering} error={error} />;
   }
 
-  if (showOnboarding) {
-    return <Onboarding onRegister={handleRegister} language={language} initialName={patient.name} isLoading={isRegistering} error={error} />;
+  if (!user || !patient) {
+    return <Login onLogin={handleLogin} language={language} isLoading={isLoggingIn} error={error} />;
   }
 
   return (
@@ -943,7 +1004,7 @@ export default function App() {
               >
                 <Languages size={14} className="text-brand-primary" />
                 <span className="text-[10px] font-black tracking-widest text-white">{language}</span>
-                <ChevronDown size={14} className={`text-gray-400 transition-transform ${isLanguageMenuOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown size={14} className={`text-brand-primary transition-transform ${isLanguageMenuOpen ? 'rotate-180' : ''}`} />
               </button>
               
               <AnimatePresence>
@@ -952,7 +1013,7 @@ export default function App() {
                     initial={{ opacity: 0, y: 10, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                    className="absolute right-0 mt-2 w-32 bg-gray-800 border border-white/10 rounded-2xl shadow-2xl z-[110] py-2"
+                    className="absolute right-0 mt-2 w-32 bg-white/10 border border-white/10 rounded-2xl shadow-2xl z-[110] py-2"
                   >
                     {(['FR', 'SW', 'MSH'] as Language[]).map(lang => (
                       <button 
@@ -961,7 +1022,7 @@ export default function App() {
                           handleLanguageChange(lang);
                           setIsLanguageMenuOpen(false);
                         }}
-                        className={`w-full text-left px-4 py-2 text-[10px] font-black tracking-widest hover:bg-brand-primary/10 transition-colors ${language === lang ? 'text-brand-primary' : 'text-gray-300'}`}
+                        className={`w-full text-left px-4 py-2 text-[10px] font-black tracking-widest hover:bg-brand-primary/10 transition-colors ${language === lang ? 'text-brand-primary' : 'text-brand-primary'}`}
                       >
                         {lang === 'FR' ? t.french : lang === 'SW' ? t.swahili : t.mashi}
                       </button>
@@ -1083,6 +1144,12 @@ export default function App() {
 
 function Login({ onLogin, language, isLoading, error }: { onLogin: (name: string) => void, language: Language, isLoading: boolean, error: string | null }) {
   const t = translations[language];
+  const [name, setName] = useState('');
+
+  const handleSubmit = (e: any) => {
+    e.preventDefault();
+    if (name.trim()) onLogin(name.trim());
+  };
 
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-6 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-green-900/20 via-gray-900 to-gray-900">
@@ -1096,23 +1163,37 @@ function Login({ onLogin, language, isLoading, error }: { onLogin: (name: string
             <Baby size={48} className="animate-pulse" />
           </div>
           <h1 className="text-4xl font-display font-black text-white border-none tracking-tight">UZAZI SALAMA</h1>
-          <p className="text-gray-400 font-medium">{t.app_subtitle}</p>
+          <p className="text-brand-primary font-medium">{t.app_subtitle}</p>
         </div>
 
-        <div className="bg-white/5 p-8 rounded-[3rem] border border-white/10 space-y-6 backdrop-blur-xl">
+        <form onSubmit={handleSubmit} className="bg-white/5 p-8 rounded-[3rem] border border-white/10 space-y-6 backdrop-blur-xl">
           {error && (
             <p className="text-red-400 text-xs font-bold text-center animate-shake">{error}</p>
           )}
 
+          <div className="space-y-2">
+            <label className="block text-[10px] font-black text-brand-primary uppercase tracking-[0.3em] font-sans italic">
+              {t.full_name || "Nom Complet"}
+            </label>
+            <input 
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Ex: Zawadi"
+              className="w-full px-5 py-4 rounded-2xl border border-white/5 bg-white/5 text-white placeholder-gray-600 focus:bg-white/10 focus:ring-2 focus:ring-brand-primary focus:outline-none font-bold"
+              disabled={isLoading}
+            />
+          </div>
+
           <button 
-            onClick={() => onLogin('google')}
-            disabled={isLoading}
+            type="submit"
+            disabled={isLoading || !name.trim()}
             className="w-full bg-brand-primary hover:bg-brand-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 font-black py-5 rounded-2xl shadow-xl shadow-brand-primary/20 transition-all active:scale-95 flex items-center justify-center gap-3"
           >
             {isLoading ? <Loader2 className="animate-spin" /> : <ShieldCheck size={20} />}
-            {!isLoading && t.google_login}
+            {!isLoading && (t.start_tracking || "Continuer")}
           </button>
-        </div>
+        </form>
       </motion.div>
     </div>
   );
@@ -1121,97 +1202,183 @@ function Login({ onLogin, language, isLoading, error }: { onLogin: (name: string
 function Onboarding({ onRegister, language, initialName, isLoading, error: parentError }: { onRegister: (name: string, phone: string, lmp: string, hospitalId: string) => void, language: Language, initialName: string, isLoading: boolean, error: string | null }) {
   const t = translations[language];
   const [formData, setFormData] = useState({
-    name: initialName,
+    name: initialName || '',
     phone: '',
     lmp: '',
     hospitalId: HOSPITALS[0].id
   });
   const [localError, setLocalError] = useState('');
+  const [step, setStep] = useState(1);
+  const totalSteps = 3;
 
   const displayError = localError || parentError;
 
+  const handleNext = () => {
+    console.log('handleNext called, step:', step, 'totalSteps:', totalSteps);
+    setLocalError('');
+    if (step === 1) {
+      if (!formData.name.trim()) {
+        setLocalError(t.full_name || "Nom requis / Name required");
+        return;
+      }
+      if (!formData.phone.trim()) {
+        setLocalError(t.phone_label || "Téléphone requis / Phone required");
+        return;
+      }
+    }
+    if (step === 2) {
+      const lmpDate = new Date(formData.lmp);
+      const today = new Date();
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(today.getFullYear() - 1);
+      
+      if (!formData.lmp || lmpDate > today || lmpDate < oneYearAgo || isNaN(lmpDate.getTime())) {
+        setLocalError(t.invalid_date || "Date invalide");
+        return;
+      }
+    }
+    
+    if (step < totalSteps) {
+      setStep(step + 1);
+    } else {
+      console.log('Registering with:', formData);
+      onRegister(formData.name, formData.phone, formData.lmp, formData.hospitalId);
+    }
+  };
+
+  const handleBack = () => {
+    setLocalError('');
+    if (step > 1) setStep(step - 1);
+  };
+
   return (
     <div className="flex flex-col min-h-screen max-w-md mx-auto bg-app-bg p-8">
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mt-12 mb-8"
-      >
-        <div className="w-20 h-20 bg-brand-primary/20 rounded-[2rem] flex items-center justify-center text-brand-primary mb-8 mx-auto shadow-2xl shadow-green-900/20">
-          <Baby size={48} className="animate-pulse" />
-        </div>
-        <h1 className="text-3xl font-display font-black text-white border-none text-center leading-tight">UZAZI SALAMA</h1>
-        <p className="text-gray-500 mt-3 text-center text-sm font-medium leading-relaxed px-4">{t.app_subtitle}</p>
-      </motion.div>
+      {/* Progress Dots */}
+      <div className="flex gap-2 mb-12 justify-center mt-6">
+        {[...Array(totalSteps)].map((_, i) => (
+          <div 
+            key={i} 
+            className={`h-1.5 rounded-full transition-all duration-500 ${i + 1 === step ? 'w-8 bg-brand-primary' : i + 1 < step ? 'w-4 bg-brand-primary/50' : 'w-4 bg-white/10'}`} 
+          />
+        ))}
+      </div>
 
-      <div className="space-y-8">
-        <motion.div 
-          initial={{ opacity: 0, x: 20 }} 
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={step}
+          initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
-          className="space-y-6"
+          exit={{ opacity: 0, x: -20 }}
+          transition={{ duration: 0.3 }}
+          className="flex-1 flex flex-col"
         >
-          <div className="space-y-5">
-            <div>
-              <label className="block text-[10px] font-black text-brand-primary uppercase tracking-[0.3em] mb-3 font-sans italic">{t.phone_label}</label>
-              <input 
-                type="tel" 
-                placeholder="+243 ..."
-                className="w-full px-5 py-4 rounded-2xl border border-white/5 bg-white/5 text-white placeholder-gray-600 focus:bg-white/10 focus:ring-2 focus:ring-brand-primary focus:outline-none font-bold"
-                value={formData.phone}
-                onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                disabled={isLoading}
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] font-black text-brand-primary uppercase tracking-[0.3em] mb-3 font-sans italic">{t.lmp_date}</label>
-              <input 
-                type="date" 
-                className="w-full px-5 py-4 rounded-2xl border border-white/5 bg-white/5 text-white focus:bg-white/10 focus:ring-2 focus:ring-brand-primary focus:outline-none font-bold"
-                value={formData.lmp}
-                onChange={(e) => setFormData({...formData, lmp: e.target.value})}
-                disabled={isLoading}
-              />
-               {displayError && <p className="text-red-400 text-[10px] font-bold mt-2 uppercase tracking-widest">{displayError}</p>}
-            </div>
-            <div>
-              <label className="block text-[10px] font-black text-brand-primary uppercase tracking-[0.3em] mb-3 font-sans italic">{t.medical_center}</label>
-              <div className="relative">
-                <select 
-                  className="w-full px-5 py-4 rounded-2xl border border-white/5 bg-white/5 text-white focus:bg-white/10 focus:ring-2 focus:ring-brand-primary focus:outline-none appearance-none font-bold"
-                  value={formData.hospitalId}
-                  onChange={(e) => setFormData({...formData, hospitalId: e.target.value})}
-                  disabled={isLoading}
-                >
-                  {HOSPITALS.map(h => (
-                    <option key={h.id} value={h.id}>{h.name}</option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" size={18} />
+          {step === 1 && (
+            <div className="space-y-6 flex-1">
+              <div className="w-16 h-16 bg-brand-primary/20 rounded-2xl flex items-center justify-center text-brand-primary mb-6 shadow-xl shadow-brand-primary/10">
+                <User size={32} />
+              </div>
+              <h2 className="text-3xl font-display font-black text-white leading-tight mb-2">Bienvenue !<br/>Faisons connaissance.</h2>
+              <p className="text-brand-primary/60 text-sm mb-8 font-medium">Commençons par les bases de votre identité.</p>
+
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-[10px] font-black text-brand-primary uppercase tracking-[0.3em] mb-3 font-sans italic">{t.full_name || "Nom Complet"}</label>
+                  <input 
+                    type="text" 
+                    placeholder={t.full_name_placeholder || "Ex: Zawadi"}
+                    className="w-full px-5 py-4 rounded-2xl border border-white/5 bg-white/5 text-white placeholder-gray-600 focus:bg-white/10 focus:ring-2 focus:ring-brand-primary focus:outline-none font-bold transition-all"
+                    value={formData.name}
+                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    disabled={isLoading}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-brand-primary uppercase tracking-[0.3em] mb-3 font-sans italic">{t.phone_label}</label>
+                  <input 
+                    type="tel" 
+                    placeholder="+243 ..."
+                    className="w-full px-5 py-4 rounded-2xl border border-white/5 bg-white/5 text-white placeholder-gray-600 focus:bg-white/10 focus:ring-2 focus:ring-brand-primary focus:outline-none font-bold transition-all"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                    disabled={isLoading}
+                  />
+                </div>
               </div>
             </div>
-          </div>
+          )}
+
+          {step === 2 && (
+            <div className="space-y-6 flex-1">
+              <div className="w-16 h-16 bg-brand-primary/20 rounded-2xl flex items-center justify-center text-brand-primary mb-6 shadow-xl shadow-brand-primary/10">
+                <Calendar size={32} />
+              </div>
+              <h2 className="text-3xl font-display font-black text-white leading-tight mb-2">Votre Suivi</h2>
+              <p className="text-brand-primary/60 text-sm mb-8 font-medium">Cela nous aide à personnaliser vos recommandations pour votre grossesse.</p>
+
+              <div>
+                <label className="block text-[10px] font-black text-brand-primary uppercase tracking-[0.3em] mb-3 font-sans italic">{t.lmp_date}</label>
+                <input 
+                  type="date" 
+                  className="w-full px-5 py-4 rounded-2xl border border-white/5 bg-white/5 text-white focus:bg-white/10 focus:ring-2 focus:ring-brand-primary focus:outline-none font-bold transition-all"
+                  value={formData.lmp}
+                  onChange={(e) => setFormData({...formData, lmp: e.target.value})}
+                  disabled={isLoading}
+                />
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="space-y-6 flex-1">
+              <div className="w-16 h-16 bg-brand-primary/20 rounded-2xl flex items-center justify-center text-brand-primary mb-6 shadow-xl shadow-brand-primary/10">
+                <MapPin size={32} />
+              </div>
+              <h2 className="text-3xl font-display font-black text-white leading-tight mb-2">Centre Médical</h2>
+              <p className="text-brand-primary/60 text-sm mb-8 font-medium">Où souhaitez-vous être suivie ?</p>
+
+              <div>
+                <label className="block text-[10px] font-black text-brand-primary uppercase tracking-[0.3em] mb-3 font-sans italic">{t.medical_center}</label>
+                <div className="relative">
+                  <select 
+                    className="w-full px-5 py-4 rounded-2xl border border-white/5 bg-white/5 text-white focus:bg-white/10 focus:ring-2 focus:ring-brand-primary focus:outline-none appearance-none font-bold transition-all"
+                    value={formData.hospitalId}
+                    onChange={(e) => setFormData({...formData, hospitalId: e.target.value})}
+                    disabled={isLoading}
+                  >
+                    {HOSPITALS.map(h => (
+                      <option key={h.id} value={h.id} className="bg-gray-900">{h.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-brand-primary/70 pointer-events-none" size={18} />
+                </div>
+              </div>
+            </div>
+          )}
+        </motion.div>
+      </AnimatePresence>
+
+      <div className="mt-8">
+        {displayError && <p className="text-red-400 text-center text-[10px] font-bold mb-4 uppercase tracking-widest">{displayError}</p>}
+        <div className="flex gap-4">
+          {step > 1 && (
+            <button 
+              onClick={handleBack}
+              disabled={isLoading}
+              className="w-14 h-14 shrink-0 rounded-2xl border border-white/10 text-white flex items-center justify-center hover:bg-white/5 transition-all"
+            >
+              <ArrowLeft size={20} />
+            </button>
+          )}
           <motion.button 
             whileTap={{ scale: 0.95 }}
             disabled={isLoading}
-            onClick={() => {
-              const lmpDate = new Date(formData.lmp);
-              const today = new Date();
-              const tenMonthsAgo = new Date();
-              tenMonthsAgo.setMonth(today.getMonth() - 10);
-
-              if (lmpDate > today || lmpDate < tenMonthsAgo || isNaN(lmpDate.getTime())) {
-                setLocalError(t.invalid_date);
-                return;
-              }
-              setLocalError('');
-              onRegister(formData.name, formData.phone, formData.lmp, formData.hospitalId);
-            }}
-            className="w-full bg-brand-primary hover:bg-brand-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 py-5 rounded-2xl font-black shadow-2xl flex items-center justify-center gap-2 text-sm uppercase tracking-widest mt-4"
+            onClick={handleNext}
+            className="flex-1 bg-brand-primary hover:bg-brand-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 h-14 rounded-2xl font-black shadow-2xl flex items-center justify-center gap-2 text-sm uppercase tracking-widest transition-all"
           >
-            {isLoading ? <Loader2 className="animate-spin" /> : t.start_tracking}
-            {!isLoading && <ArrowRight size={18} />}
+            {isLoading ? <Loader2 className="animate-spin" /> : (step === totalSteps ? t.start_tracking : t.continue)}
+            {!isLoading && step < totalSteps && <ArrowRight size={18} />}
           </motion.button>
-        </motion.div>
+        </div>
       </div>
     </div>
   );
@@ -1295,11 +1462,11 @@ function HomeView({
                <Clock size={32} className="animate-pulse" />
             </div>
             <div>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{t.predict_labor}</p>
+              <p className="text-[10px] font-black text-brand-primary uppercase tracking-widest">{t.predict_labor}</p>
               <h3 className="text-xl font-display font-black text-gray-900 border-none leading-tight">
                 {laborPrediction.date} à {laborPrediction.time}
               </h3>
-              <p className="text-[10px] text-gray-400 font-medium italic mt-1">{t.labor_prediction_desc}</p>
+              <p className="text-[10px] text-brand-primary font-medium italic mt-1">{t.labor_prediction_desc}</p>
             </div>
           </motion.div>
         )}
@@ -1374,7 +1541,7 @@ function HomeView({
         {/* Right Column: Information & Daily Tip */}
         <div className="lg:col-span-5 space-y-8">
           <div className="px-4">
-             <h4 className="text-[10px] font-black uppercase text-gray-500 tracking-[0.4em] italic">{t.current_health}</h4>
+             <h4 className="text-[10px] font-black uppercase text-brand-primary/70 tracking-[0.4em] italic">{t.current_health}</h4>
           </div>
           <AnimatePresence mode="wait">
             {isAnalyzing ? (
@@ -1383,7 +1550,7 @@ function HomeView({
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9 }}
-                className="bg-gray-800/50 p-8 rounded-[2.5rem] flex flex-col items-center gap-6 text-center shadow-2xl border border-brand-primary/30 min-h-[200px] justify-center"
+                className="bg-white/10 p-8 rounded-[2.5rem] flex flex-col items-center gap-6 text-center shadow-2xl border border-brand-primary/30 min-h-[200px] justify-center"
               >
                 <Loader2 className="text-brand-primary animate-spin" size={48} />
                 <p className="font-black text-white uppercase tracking-[0.3em] text-xs">{t.analyzing}</p>
@@ -1425,7 +1592,7 @@ function HomeView({
                 </div>
               </motion.div>
             ) : (
-                <div className="bg-gray-800/20 p-8 rounded-[2.5rem] border border-white/5 flex flex-col items-center justify-center text-center gap-4 min-h-[200px]">
+                <div className="bg-white/10/20 p-8 rounded-[2.5rem] border border-white/5 flex flex-col items-center justify-center text-center gap-4 min-h-[200px]">
                   <Heart className="text-gray-700" size={48} />
                   <p className="text-[10px] font-black text-gray-600 uppercase tracking-[0.3em] italic">{t.start_checkup}</p>
                 </div>
@@ -1435,7 +1602,7 @@ function HomeView({
           {/* Daily Tip Card */}
           <motion.div 
             layout
-            className="bg-gray-800/40 rounded-[2.5rem] border border-white/5 overflow-hidden shadow-sm group hover:border-brand-primary/30 transition-all duration-500"
+            className="bg-white/10/40 rounded-[2.5rem] border border-white/5 overflow-hidden shadow-sm group hover:border-brand-primary/30 transition-all duration-500"
           >
             <div className="relative">
               {dailyTip.imageUrl && (
@@ -1454,7 +1621,7 @@ function HomeView({
             <div className="p-8 relative">
               <p className="text-[10px] font-black text-brand-primary uppercase tracking-[0.4em] mb-3">{t.conseil} — {t[dailyTip.category as keyof typeof t] || dailyTip.category}</p>
               <h3 className="font-display font-black text-white text-xl border-none leading-tight">{dailyTip.translations[language].title}</h3>
-              <p className="text-gray-400 text-sm mt-4 leading-relaxed italic font-medium opacity-80">{dailyTip.translations[language].content}</p>
+              <p className="text-brand-primary text-sm mt-4 leading-relaxed italic font-medium opacity-80">{dailyTip.translations[language].content}</p>
               
               <div className="mt-6 pt-6 border-t border-white/5 flex items-center justify-between">
                 <span className="text-[9px] font-black text-gray-600 uppercase tracking-widest italic">{t.refresh_tips}</span>
@@ -1502,7 +1669,7 @@ function CheckupView({ onAddLog, language }: { onAddLog: (log: { symptoms: strin
     <div className="p-6 space-y-8 pb-32">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
         <h2 className="text-3xl font-display font-black text-white border-none leading-tight">{t.diagnostic_title}</h2>
-        <p className="text-gray-500 text-sm mt-1 font-medium italic">{t.regular_suivi}</p>
+        <p className="text-brand-primary/70 text-sm mt-1 font-medium italic">{t.regular_suivi}</p>
       </motion.div>
 
       <div className="space-y-4">
@@ -1518,10 +1685,10 @@ function CheckupView({ onAddLog, language }: { onAddLog: (log: { symptoms: strin
               className={`flex items-center justify-between px-6 py-5 rounded-[2rem] border transition-all h-full ${
                 symptoms.includes(s.id) 
                   ? 'border-brand-primary bg-brand-primary/10 ring-2 ring-brand-primary/20 scale-[1.02]' 
-                  : 'border-white/5 bg-gray-800/40'
+                  : 'border-white/5 bg-white/10/40'
               }`}
             >
-              <span className={`text-sm font-black uppercase tracking-widest text-left ${symptoms.includes(s.id) ? 'text-brand-primary' : 'text-gray-400'}`}>{s.label}</span>
+              <span className={`text-sm font-black uppercase tracking-widest text-left ${symptoms.includes(s.id) ? 'text-brand-primary' : 'text-brand-primary'}`}>{s.label}</span>
               {symptoms.includes(s.id) ? (
                 <div className="w-6 h-6 bg-brand-primary rounded-lg flex items-center justify-center text-gray-900 shrink-0">
                   <ShieldCheck size={16} />
@@ -1535,11 +1702,11 @@ function CheckupView({ onAddLog, language }: { onAddLog: (log: { symptoms: strin
       </div>
 
       <div className="space-y-4">
-        <label className="block text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] mb-2">{t.note_label}</label>
+        <label className="block text-[10px] font-black text-brand-primary/70 uppercase tracking-[0.3em] mb-2">{t.note_label}</label>
         <textarea 
           placeholder={t.note_placeholder}
           rows={3}
-          className="w-full px-5 py-4 rounded-[1.5rem] border border-white/5 focus:ring-2 focus:ring-brand-primary focus:outline-none bg-gray-800/40 text-white text-sm font-medium leading-relaxed"
+          className="w-full px-5 py-4 rounded-[1.5rem] border border-white/5 focus:ring-2 focus:ring-brand-primary focus:outline-none bg-white/10/40 text-white text-sm font-medium leading-relaxed"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
         />
@@ -1547,21 +1714,21 @@ function CheckupView({ onAddLog, language }: { onAddLog: (log: { symptoms: strin
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label className="block text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] mb-2">{t.bp}</label>
+          <label className="block text-[10px] font-black text-brand-primary/70 uppercase tracking-[0.3em] mb-2">{t.bp}</label>
           <input 
             type="text" 
             placeholder="12/8"
-            className="w-full px-5 py-4 rounded-[1.5rem] border border-white/5 focus:ring-2 focus:ring-brand-primary focus:outline-none bg-gray-800/40 text-white text-sm font-black tracking-widest placeholder-gray-700"
+            className="w-full px-5 py-4 rounded-[1.5rem] border border-white/5 focus:ring-2 focus:ring-brand-primary focus:outline-none bg-white/10/40 text-white text-sm font-black tracking-widest placeholder-gray-700"
             value={bloodPressure}
             onChange={(e) => setBloodPressure(e.target.value)}
           />
         </div>
         <div>
-          <label className="block text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] mb-2">{t.weight}</label>
+          <label className="block text-[10px] font-black text-brand-primary/70 uppercase tracking-[0.3em] mb-2">{t.weight}</label>
           <input 
             type="number" 
             placeholder="65"
-            className="w-full px-5 py-4 rounded-[1.5rem] border border-white/5 focus:ring-2 focus:ring-brand-primary focus:outline-none bg-gray-800/40 text-white text-sm font-black tracking-widest placeholder-gray-700"
+            className="w-full px-5 py-4 rounded-[1.5rem] border border-white/5 focus:ring-2 focus:ring-brand-primary focus:outline-none bg-white/10/40 text-white text-sm font-black tracking-widest placeholder-gray-700"
             value={weight}
             onChange={(e) => setWeight(e.target.value)}
           />
@@ -1633,7 +1800,7 @@ function EducationView({ language, weeksPregnant }: { language: Language, weeksP
       <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex justify-between items-end">
         <div>
           <h2 className="text-3xl font-display font-black text-white border-none leading-tight">{t.guide_maternel}</h2>
-          <p className="text-gray-500 text-sm mt-1 font-medium italic">{t.know_protect} ({t.trimester} {currentTrimester})</p>
+          <p className="text-brand-primary/70 text-sm mt-1 font-medium italic">{t.know_protect} ({t.trimester} {currentTrimester})</p>
         </div>
         <button 
           onClick={refreshTips}
@@ -1661,7 +1828,7 @@ function EducationView({ language, weeksPregnant }: { language: Language, weeksP
             <p className="text-gray-600 font-medium leading-relaxed">{aiTip.content}</p>
             <button 
               onClick={() => setAiTip(null)}
-              className="px-6 py-2 rounded-full border-2 border-gray-100 text-gray-400 font-bold text-xs hover:bg-gray-50 transition-colors"
+              className="px-6 py-2 rounded-full border-2 border-gray-100 text-brand-primary font-bold text-xs hover:bg-gray-50 transition-colors"
             >
               {t.back}
             </button>
@@ -1687,7 +1854,7 @@ function EducationView({ language, weeksPregnant }: { language: Language, weeksP
               <div className="space-y-4">
                 <span className="inline-block px-4 py-1.5 rounded-full bg-brand-primary text-gray-900 text-[10px] font-black uppercase tracking-widest">{t[featuredTip.category as keyof typeof t] || featuredTip.category}</span>
                 <h3 className="text-2xl font-display font-black text-white leading-tight">{featuredTip.translations[language].title}</h3>
-                <p className="text-gray-400 text-lg leading-relaxed font-medium">{featuredTip.translations[language].content}</p>
+                <p className="text-brand-primary text-lg leading-relaxed font-medium">{featuredTip.translations[language].content}</p>
               </div>
            </div>
            <div className="absolute top-0 right-0 w-32 h-32 bg-brand-primary/10 rounded-full blur-3xl -mr-16 -mt-16" />
@@ -1705,7 +1872,7 @@ function EducationView({ language, weeksPregnant }: { language: Language, weeksP
         </button>
         <button 
           onClick={() => setSelectedCategory(null)}
-          className={`px-4 py-2 rounded-full text-[10px] font-black tracking-widest uppercase shrink-0 transition-all ${!selectedCategory ? 'bg-brand-primary text-gray-900 shadow-lg' : 'bg-white/5 text-gray-400 border border-white/10'}`}
+          className={`px-4 py-2 rounded-full text-[10px] font-black tracking-widest uppercase shrink-0 transition-all ${!selectedCategory ? 'bg-brand-primary text-gray-900 shadow-lg' : 'bg-white/5 text-brand-primary border border-white/10'}`}
         >
           {t.all}
         </button>
@@ -1713,7 +1880,7 @@ function EducationView({ language, weeksPregnant }: { language: Language, weeksP
           <button 
             key={cat}
             onClick={() => setSelectedCategory(cat)}
-            className={`px-4 py-2 rounded-full text-[10px] font-black tracking-widest uppercase shrink-0 transition-all ${selectedCategory === cat ? 'bg-brand-primary text-gray-900 shadow-lg' : 'bg-white/5 text-gray-400 border border-white/10'}`}
+            className={`px-4 py-2 rounded-full text-[10px] font-black tracking-widest uppercase shrink-0 transition-all ${selectedCategory === cat ? 'bg-brand-primary text-gray-900 shadow-lg' : 'bg-white/5 text-brand-primary border border-white/10'}`}
           >
             {t[cat as keyof typeof t] || cat}
           </button>
@@ -1730,7 +1897,7 @@ function EducationView({ language, weeksPregnant }: { language: Language, weeksP
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.8 }}
               transition={{ delay: idx * 0.05 }}
-              className="bg-gray-800/40 rounded-[2.5rem] shadow-sm border border-white/5 relative overflow-hidden group flex flex-col"
+              className="bg-white/10/40 rounded-[2.5rem] shadow-sm border border-white/5 relative overflow-hidden group flex flex-col"
             >
               {article.imageUrl && (
                 <div className="h-40 overflow-hidden">
@@ -1744,7 +1911,7 @@ function EducationView({ language, weeksPregnant }: { language: Language, weeksP
                   {article.category === 'nutrition' ? <Droplets size={20} /> : <AlertCircle size={20} />}
                 </div>
                 <h3 className="font-display font-black text-white text-xl border-none leading-tight tracking-tight">{article.translations[language].title}</h3>
-                <p className="text-gray-400 text-sm mt-4 leading-relaxed font-medium opacity-80">{article.translations[language].content}</p>
+                <p className="text-brand-primary text-sm mt-4 leading-relaxed font-medium opacity-80">{article.translations[language].content}</p>
               </div>
             </motion.div>
           ))}
@@ -1781,7 +1948,7 @@ function ProfileView({ patient, logs, onLogout, language, onTabChange }: { patie
       <motion.div 
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="flex flex-col lg:flex-row lg:items-start items-center gap-10 bg-gray-800/20 p-8 md:p-12 rounded-[3.5rem] border border-white/5 shadow-2xl relative overflow-hidden"
+        className="flex flex-col lg:flex-row lg:items-start items-center gap-10 bg-white/10/20 p-8 md:p-12 rounded-[3.5rem] border border-white/5 shadow-2xl relative overflow-hidden"
       >
         <div className="absolute top-0 right-0 w-64 h-64 bg-brand-primary/5 rounded-full blur-3xl -mr-32 -mt-32" />
         
@@ -1813,18 +1980,18 @@ function ProfileView({ patient, logs, onLogout, language, onTabChange }: { patie
                 </span>
                </div>
              </div>
-             <p className="text-[12px] font-black text-gray-500 uppercase tracking-[0.4em] italic opacity-80">{patient.phone}</p>
+             <p className="text-[12px] font-black text-brand-primary/70 uppercase tracking-[0.4em] italic opacity-80">{patient.phone}</p>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-6 mt-8">
-             <div className="bg-gray-900/60 p-4 md:p-5 rounded-[2rem] border border-white/5 flex flex-col items-center lg:items-start">
+             <div className="bg-white/10 p-4 md:p-5 rounded-[2rem] border border-white/5 flex flex-col items-center lg:items-start">
                 <Calendar className="text-brand-primary mb-2" size={20} />
-                <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">{t.journey}</p>
+                <p className="text-[9px] font-black text-brand-primary/70 uppercase tracking-widest mb-1">{t.journey}</p>
                 <p className="text-lg md:text-xl font-black text-white leading-none whitespace-nowrap">{patient.weeksPregnant} {t.weeks}</p>
              </div>
-             <div className="bg-gray-900/60 p-4 md:p-5 rounded-[2rem] border border-white/5 flex flex-col items-center lg:items-start max-w-full overflow-hidden">
+             <div className="bg-white/10 p-4 md:p-5 rounded-[2rem] border border-white/5 flex flex-col items-center lg:items-start max-w-full overflow-hidden">
                 <MapPin className="text-blue-400 mb-2" size={20} />
-                <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1 truncate w-full">{t.medical_record}</p>
+                <p className="text-[9px] font-black text-brand-primary/70 uppercase tracking-widest mb-1 truncate w-full">{t.medical_record}</p>
                 <p className="text-[11px] md:text-[12px] font-black text-white truncate w-full uppercase">{hospital?.name}</p>
              </div>
              <div className="bg-brand-primary p-4 md:p-5 rounded-[2rem] flex flex-col items-center lg:items-start group cursor-pointer hover:shadow-lg shadow-brand-primary/20 transition-all col-span-2 md:col-span-1" onClick={() => setShowQR(true)}>
@@ -1840,7 +2007,7 @@ function ProfileView({ patient, logs, onLogout, language, onTabChange }: { patie
         {/* Left Column: Stats & Tools */}
         <div className="xl:col-span-2 space-y-8">
            <div className="flex items-center justify-between px-4">
-              <h4 className="text-[10px] font-black uppercase text-gray-500 tracking-[0.4em] italic">{t.tools}</h4>
+              <h4 className="text-[10px] font-black uppercase text-brand-primary/70 tracking-[0.4em] italic">{t.tools}</h4>
               <button 
                 onClick={() => {
                   const hospital = HOSPITALS.find(h => h.id === (patient as any).assignedHospitalId);
@@ -1855,62 +2022,62 @@ function ProfileView({ patient, logs, onLogout, language, onTabChange }: { patie
            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-2 gap-4 h-fit">
               <KickCounterCard t={t} />
               
-              <div className="bg-gray-800/20 p-6 rounded-[2.5rem] border border-white/5 flex flex-col items-center justify-center text-center group hover:bg-white/5 transition-colors aspect-square lg:aspect-auto">
+              <div className="bg-white/10/20 p-6 rounded-[2.5rem] border border-white/5 flex flex-col items-center justify-center text-center group hover:bg-white/5 transition-colors aspect-square lg:aspect-auto">
                 <div className="w-12 h-12 bg-blue-400/10 text-blue-400 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg">
                   <Activity size={24} />
                 </div>
-                <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1 italic">{t.weight_track}</p>
+                <p className="text-[10px] font-black text-brand-primary/70 uppercase tracking-widest mb-1 italic">{t.weight_track}</p>
                 <p className="text-xl md:text-2xl font-black text-white">{patient.weight} kg</p>
               </div>
 
-              <div className="bg-gray-800/20 p-6 rounded-[2.5rem] border border-white/5 flex flex-col items-center justify-center text-center group hover:bg-white/5 transition-colors aspect-square lg:aspect-auto">
+              <div className="bg-white/10/20 p-6 rounded-[2.5rem] border border-white/5 flex flex-col items-center justify-center text-center group hover:bg-white/5 transition-colors aspect-square lg:aspect-auto">
                 <div className="w-12 h-12 bg-red-400/10 text-red-400 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg">
                   <Heart size={24} />
                 </div>
-                <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1 italic">{t.bp_track}</p>
+                <p className="text-[10px] font-black text-brand-primary/70 uppercase tracking-widest mb-1 italic">{t.bp_track}</p>
                 <p className="text-xl md:text-2xl font-black text-white">12/8</p>
               </div>
 
-              <div className="bg-gray-800/20 p-6 rounded-[2.5rem] border border-white/5 flex flex-col items-center justify-center text-center opacity-40 aspect-square lg:aspect-auto">
+              <div className="bg-white/10/20 p-6 rounded-[2.5rem] border border-white/5 flex flex-col items-center justify-center text-center opacity-40 aspect-square lg:aspect-auto">
                 <div className="w-12 h-12 bg-purple-400/10 text-purple-400 rounded-2xl flex items-center justify-center mb-4">
                   <Clock size={24} />
                 </div>
-                <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1 italic">{t.contractions}</p>
+                <p className="text-[10px] font-black text-brand-primary/70 uppercase tracking-widest mb-1 italic">{t.contractions}</p>
                 <p className="text-sm font-black text-white italic">{t.soon}</p>
               </div>
            </div>
 
            <div className="space-y-4">
-              <h4 className="text-[10px] font-black uppercase text-gray-500 tracking-[0.4em] px-4 italic">{t.medical_file}</h4>
-              <div className="bg-gray-800/20 p-8 rounded-[3rem] border border-white/5 flex items-center justify-between group cursor-pointer hover:bg-white/5 transition-colors" onClick={() => onTabChange('record')}>
+              <h4 className="text-[10px] font-black uppercase text-brand-primary/70 tracking-[0.4em] px-4 italic">{t.medical_file}</h4>
+              <div className="bg-white/10/20 p-8 rounded-[3rem] border border-white/5 flex items-center justify-between group cursor-pointer hover:bg-white/5 transition-colors" onClick={() => onTabChange('record')}>
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-brand-primary/10 rounded-2xl flex items-center justify-center text-brand-primary group-hover:scale-110 transition-transform">
                     <History size={24} />
                   </div>
                   <div>
                     <h5 className="text-sm font-black text-white uppercase tracking-widest">{t.medical_record}</h5>
-                    <p className="text-[10px] text-gray-500 font-bold opacity-60 uppercase">{t.see_details}</p>
+                    <p className="text-[10px] text-brand-primary/70 font-bold opacity-60 uppercase">{t.see_details}</p>
                   </div>
                 </div>
-                <ChevronRight size={20} className="text-gray-500" />
+                <ChevronRight size={20} className="text-brand-primary/70" />
               </div>
            </div>
 
            <div className="space-y-4">
-              <h4 className="text-[10px] font-black uppercase text-gray-500 tracking-[0.4em] px-4 italic">{t.medical_history}</h4>
+              <h4 className="text-[10px] font-black uppercase text-brand-primary/70 tracking-[0.4em] px-4 italic">{t.medical_history}</h4>
               <div className="space-y-3">
                 {logs.length === 0 ? (
-                  <div className="bg-gray-800/20 p-12 rounded-[3.5rem] border border-dashed border-white/5 text-center">
+                  <div className="bg-white/10/20 p-12 rounded-[3.5rem] border border-dashed border-white/5 text-center">
                     <p className="text-sm text-gray-600 italic font-medium">{t.no_logs}</p>
                   </div>
                 ) : (
                   logs.map((log) => (
                     <motion.div 
                       key={log.id} 
-                      className="bg-gray-800/30 p-6 md:p-8 rounded-[3rem] border border-white/5 hover:bg-gray-800/50 transition-all group"
+                      className="bg-white/10/30 p-6 md:p-8 rounded-[3rem] border border-white/5 hover:bg-white/10 transition-all group"
                     >
                       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                         <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{new Date(log.date).toLocaleDateString(language === 'FR' ? 'fr-FR' : 'sw-KE')}</span>
+                         <span className="text-[10px] font-black text-brand-primary/70 uppercase tracking-widest">{new Date(log.date).toLocaleDateString(language === 'FR' ? 'fr-FR' : 'sw-KE')}</span>
                          <span className={`w-fit px-4 py-2 rounded-full text-[9px] font-black uppercase tracking-[0.2em] shadow-lg ${
                              log.status === 'critical' ? 'bg-red-400 text-gray-900' : 
                              log.status === 'warning' ? 'bg-yellow-400 text-gray-900' : 
@@ -1921,12 +2088,12 @@ function ProfileView({ patient, logs, onLogout, language, onTabChange }: { patie
                       </div>
                       <div className="flex flex-wrap gap-2 mb-6">
                         {log.symptoms.map(s => (
-                          <span key={s} className="bg-white/5 px-4 py-2 rounded-xl text-[10px] font-bold text-gray-400 border border-white/10 group-hover:bg-white/10 transition-colors uppercase tracking-widest leading-none">{s}</span>
+                          <span key={s} className="bg-white/5 px-4 py-2 rounded-xl text-[10px] font-bold text-brand-primary border border-white/10 group-hover:bg-white/10 transition-colors uppercase tracking-widest leading-none">{s}</span>
                         ))}
                       </div>
-                      <div className="bg-gray-900/40 p-6 rounded-[2rem] relative overflow-hidden">
+                      <div className="bg-white/5 p-6 rounded-[2rem] relative overflow-hidden">
                          <BrainCircuit size={40} className="absolute right-[-10px] bottom-[-10px] text-white opacity-5" />
-                         <p className="text-xs md:text-sm text-gray-400 leading-relaxed font-medium relative z-10">{log.aiAnalysis}</p>
+                         <p className="text-xs md:text-sm text-brand-primary leading-relaxed font-medium relative z-10">{log.aiAnalysis}</p>
                       </div>
                     </motion.div>
                   ))
@@ -1937,9 +2104,9 @@ function ProfileView({ patient, logs, onLogout, language, onTabChange }: { patie
 
         {/* Right Column: Pass QR Section */}
         <div className="space-y-8">
-           <h4 className="text-[10px] font-black uppercase text-gray-500 tracking-[0.4em] px-4 italic">{t.digital_pass}</h4>
+           <h4 className="text-[10px] font-black uppercase text-brand-primary/70 tracking-[0.4em] px-4 italic">{t.digital_pass}</h4>
            
-           <div className="bg-gray-800/20 p-5 rounded-[3.5rem] border border-white/5 shadow-2xl relative overflow-hidden group">
+           <div className="bg-white/10/20 p-5 rounded-[3.5rem] border border-white/5 shadow-2xl relative overflow-hidden group">
               <div className="absolute inset-0 bg-gradient-to-br from-brand-primary/5 via-transparent to-transparent opacity-50 transition-opacity group-hover:opacity-100" />
               
               <div className="relative z-10 space-y-4">
@@ -1989,7 +2156,7 @@ function ProfileView({ patient, logs, onLogout, language, onTabChange }: { patie
                             <p className="text-[10px] font-black text-gray-900 uppercase tracking-[0.4em] px-4 py-2 bg-brand-primary/10 rounded-full">{t.id_label}: {patient.id.toUpperCase()}</p>
                             <span className="h-[1px] flex-1 bg-gray-100" />
                           </div>
-                          <p className="text-[10px] md:text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] leading-relaxed max-w-[280px] mx-auto opacity-70 italic">
+                          <p className="text-[10px] md:text-[11px] font-black text-brand-primary uppercase tracking-[0.2em] leading-relaxed max-w-[280px] mx-auto opacity-70 italic">
                             {t.scan_info}
                           </p>
                         </div>
@@ -2000,17 +2167,17 @@ function ProfileView({ patient, logs, onLogout, language, onTabChange }: { patie
               </div>
            </div>
 
-           <div className="bg-gray-800/20 p-8 md:p-10 rounded-[3.5rem] border border-white/5 space-y-10">
+           <div className="bg-white/10/20 p-8 md:p-10 rounded-[3.5rem] border border-white/5 space-y-10">
               <div>
-                <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.4em] mb-6 italic">{t.medical_record}</p>
+                <p className="text-[10px] font-black text-brand-primary/70 uppercase tracking-[0.4em] mb-6 italic">{t.medical_record}</p>
                 <div className="space-y-4">
-                   <div className="flex items-center gap-5 bg-gray-900/60 p-5 rounded-[2rem] border border-white/5 hover:bg-white/5 transition-all group">
+                   <div className="flex items-center gap-5 bg-white/10 p-5 rounded-[2rem] border border-white/5 hover:bg-white/5 transition-all group">
                       <div className="w-14 h-14 bg-brand-primary/10 rounded-2xl flex items-center justify-center text-brand-primary shadow-inner group-hover:scale-110 transition-transform">
                          <MapPin size={28} />
                       </div>
                       <div className="flex-1 overflow-hidden">
                          <p className="text-sm font-black text-white border-none leading-none truncate uppercase tracking-widest">{hospital?.name}</p>
-                         <p className="text-[10px] text-gray-500 font-bold mt-2 opacity-60 uppercase">{hospital?.location}</p>
+                         <p className="text-[10px] text-brand-primary/70 font-bold mt-2 opacity-60 uppercase">{hospital?.location}</p>
                       </div>
                    </div>
                    
@@ -2023,7 +2190,7 @@ function ProfileView({ patient, logs, onLogout, language, onTabChange }: { patie
                       </div>
                       <div className="flex-1 text-left">
                          <p className="text-sm font-black text-white border-none leading-none uppercase tracking-widest">{t.emergency_contact}</p>
-                         <p className="text-[10px] text-gray-500 font-bold mt-2 opacity-60 uppercase">{hospital?.emergencyContact}</p>
+                         <p className="text-[10px] text-brand-primary/70 font-bold mt-2 opacity-60 uppercase">{hospital?.emergencyContact}</p>
                       </div>
                    </button>
                 </div>
@@ -2065,7 +2232,7 @@ function RecordView({ patient, logs, language, onBack }: { patient: Patient, log
         <div className="absolute top-0 right-0 w-32 h-32 bg-gray-50 rounded-bl-[5rem]" />
         
         <div className="flex flex-col md:flex-row items-center md:items-start gap-8 mb-12 relative z-10">
-          <div className="w-24 h-24 md:w-32 md:h-32 bg-gray-100 rounded-[2.5rem] flex items-center justify-center text-gray-400 overflow-hidden ring-8 ring-gray-50 shadow-inner">
+          <div className="w-24 h-24 md:w-32 md:h-32 bg-gray-100 rounded-[2.5rem] flex items-center justify-center text-brand-primary overflow-hidden ring-8 ring-gray-50 shadow-inner">
              <img 
                src="https://plus.unsplash.com/premium_photo-1675713430635-424a132e4785?auto=format&fit=crop&q=80&w=200" 
                className="w-full h-full object-cover" 
@@ -2074,9 +2241,9 @@ function RecordView({ patient, logs, language, onBack }: { patient: Patient, log
           </div>
           <div className="text-center md:text-left space-y-2">
             <h3 className="text-3xl md:text-5xl font-display font-black tracking-tight leading-none">{patient.name}</h3>
-            <p className="text-[12px] font-black text-gray-400 uppercase tracking-[0.4em] italic">{patient.phone}</p>
+            <p className="text-[12px] font-black text-brand-primary uppercase tracking-[0.4em] italic">{patient.phone}</p>
             <div className="pt-4 flex flex-wrap justify-center md:justify-start gap-2">
-               <span className="bg-gray-100 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-gray-500 border border-gray-200">{t.id_label}: {patient.id.toUpperCase()}</span>
+               <span className="bg-gray-100 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-brand-primary/70 border border-gray-200">{t.id_label}: {patient.id.toUpperCase()}</span>
                <span className="bg-green-500/10 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-green-600 border border-green-500/20">{t.followup_active}</span>
             </div>
           </div>
@@ -2084,15 +2251,15 @@ function RecordView({ patient, logs, language, onBack }: { patient: Patient, log
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
            <div className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100">
-              <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest mb-2">{t.weeks}</p>
+              <p className="text-[9px] font-black uppercase text-brand-primary tracking-widest mb-2">{t.weeks}</p>
               <p className="text-2xl font-black text-gray-900 leading-none">{patient.weeksPregnant}</p>
            </div>
            <div className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100">
-              <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest mb-2">{t.weight}</p>
+              <p className="text-[9px] font-black uppercase text-brand-primary tracking-widest mb-2">{t.weight}</p>
               <p className="text-2xl font-black text-gray-900 leading-none">{patient.weight} kg</p>
            </div>
            <div className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100">
-              <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest mb-2">{t.dpa_label}</p>
+              <p className="text-[9px] font-black uppercase text-brand-primary tracking-widest mb-2">{t.dpa_label}</p>
               <p className="text-lg font-black text-gray-900 leading-none uppercase tracking-tight">{new Date(patient.dueDate).toLocaleDateString()}</p>
            </div>
            <div className="bg-brand-primary p-6 rounded-[2rem] shadow-lg shadow-brand-primary/20">
@@ -2112,7 +2279,7 @@ function RecordView({ patient, logs, language, onBack }: { patient: Patient, log
                  </div>
                  <div className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100">
                     <p className="text-sm font-black text-gray-900 uppercase tracking-widest">{hospital?.name}</p>
-                    <p className="text-[11px] text-gray-400 font-bold mt-2 opacity-80 uppercase leading-relaxed">{hospital?.location}</p>
+                    <p className="text-[11px] text-brand-primary font-bold mt-2 opacity-80 uppercase leading-relaxed">{hospital?.location}</p>
                  </div>
               </div>
 
@@ -2140,7 +2307,7 @@ function RecordView({ patient, logs, language, onBack }: { patient: Patient, log
               
               {logs.length === 0 ? (
                 <div className="bg-gray-50 p-12 rounded-[3rem] border border-dashed border-gray-200 text-center">
-                  <p className="text-sm text-gray-400 italic font-bold">{t.no_logs}</p>
+                  <p className="text-sm text-brand-primary italic font-bold">{t.no_logs}</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -2149,7 +2316,7 @@ function RecordView({ patient, logs, language, onBack }: { patient: Patient, log
                       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                          <div className="flex items-center gap-3">
                             <span className="w-2 h-2 rounded-full bg-brand-primary" />
-                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{new Date(log.date).toLocaleDateString()}</p>
+                            <p className="text-[10px] font-black text-brand-primary uppercase tracking-widest">{new Date(log.date).toLocaleDateString()}</p>
                          </div>
                          <span className={`text-[9px] font-black px-5 py-2 rounded-full uppercase tracking-widest shadow-sm ${
                             log.status === 'critical' ? 'bg-red-500 text-white' : 
@@ -2161,7 +2328,7 @@ function RecordView({ patient, logs, language, onBack }: { patient: Patient, log
                       </div>
                       <div className="flex flex-wrap gap-2 mb-6">
                         {log.symptoms.map(s => (
-                          <span key={s} className="bg-white px-4 py-2 rounded-xl text-[10px] font-black text-gray-500 border border-gray-100 uppercase tracking-widest shadow-sm leading-none">{s}</span>
+                          <span key={s} className="bg-white px-4 py-2 rounded-xl text-[10px] font-black text-brand-primary/70 border border-gray-100 uppercase tracking-widest shadow-sm leading-none">{s}</span>
                         ))}
                       </div>
                       <div className="bg-white p-6 rounded-[1.5rem] border border-gray-100 shadow-inner relative overflow-hidden">
@@ -2176,7 +2343,7 @@ function RecordView({ patient, logs, language, onBack }: { patient: Patient, log
         </div>
 
         <div className="mt-16 pt-8 border-t border-gray-100 text-center">
-           <p className="text-[10px] font-black text-gray-300 uppercase tracking-[0.6em] mb-4">{t.generated_by}</p>
+           <p className="text-[10px] font-black text-brand-primary uppercase tracking-[0.6em] mb-4">{t.generated_by}</p>
            <div className="flex justify-center gap-4">
               <div className="w-8 h-[2px] bg-gray-100 mt-4" />
               <div className="w-12 h-12 bg-gray-50 p-2 rounded-xl">

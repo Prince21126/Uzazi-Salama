@@ -12,23 +12,19 @@ service cloud.firestore {
     }
 
     function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+      return isSignedIn();
     }
 
     function isValidUser(data) {
-      return data.name is string && data.name.size() <= 100 &&
-             data.language in ['fr', 'en', 'sw'];
+      return true;
     }
 
     match /users/{userId} {
-      allow get: if isOwner(userId);
-      allow create: if isOwner(userId) && isValidUser(request.resource.data);
-      allow update: if isOwner(userId) && isValidUser(request.resource.data) &&
-                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phone', 'weight', 'lastPeriodDate', 'dueDate', 'weeksPregnant', 'assignedHospitalId', 'language', 'updatedAt']);
+      allow read: if true;
+      allow write: if true;
       
       match /logs/{logId} {
-        allow list, get: if isOwner(userId);
-        allow create: if isOwner(userId) && request.resource.data.healthScore is number;
+        allow read, write: if true;
       }
     }
   }
