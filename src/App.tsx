@@ -47,6 +47,7 @@ import { analyzeSymptoms } from './services/aiService';
 import slugify from 'slugify';
 import { db, auth } from './lib/firebase';
 import { useAuth } from './hooks/useAuth';
+import { useHospitals } from './hooks/useHospitals';
 import { 
   doc, 
   getDoc, 
@@ -608,8 +609,9 @@ function AdminView({ language, db, logout }: { language: Language, db: any, logo
   const t = translations[language];
   const [patients, setPatients] = useState<Patient[]>([]);
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
-  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'patients' | 'hospitals' | 'emergencies'>('overview');
+  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'patients' | 'hospitals'>('overview');
   const [newHospital, setNewHospital] = useState({ name: '', location: '', phone: '' });
+  const [newPatient, setNewPatient] = useState({ name: '', phone: '', lmp: '', hospitalId: '' });
 
   useEffect(() => {
     // Real-time patients
@@ -638,6 +640,37 @@ function AdminView({ language, db, logout }: { language: Language, db: any, logo
     setNewHospital({ name: '', location: '', phone: '' });
   };
 
+  const handleAddPatient = async () => {
+    if (!newPatient.name || !newPatient.phone || !newPatient.lmp || !newPatient.hospitalId) return;
+    
+    const slug = slugify(newPatient.name, { lower: true, strict: true });
+    try {
+      const patientData: Patient = {
+        id: slug,
+        name: newPatient.name,
+        email: '',
+        phone: newPatient.phone,
+        weight: 65,
+        lastPeriodDate: newPatient.lmp,
+        dueDate: calculateDueDate(newPatient.lmp),
+        weeksPregnant: calculateWeeksPregnant(newPatient.lmp),
+        assignedHospitalId: newPatient.hospitalId,
+        language: language,
+        isAdmin: false,
+      };
+      
+      await setDoc(doc(db, 'users', slug), {
+        ...patientData,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      setNewPatient({ name: '', phone: '', lmp: '', hospitalId: '' });
+    } catch (error) {
+      console.error('Error adding patient: ', error);
+      handleFirestoreError(error, 'create', `users/${slug}`);
+    }
+  };
+
   return (
     <div className="p-6 space-y-8 max-w-6xl mx-auto min-h-screen pb-32">
        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/5 p-5 rounded-[1.5rem] border border-white/5 shadow-xl">
@@ -659,7 +692,7 @@ function AdminView({ language, db, logout }: { language: Language, db: any, logo
        </header>
 
        <div className="flex gap-2 overflow-x-auto no-scrollbar py-2">
-          {['overview', 'patients', 'hospitals', 'emergencies'].map((tab) => (
+          {['overview', 'patients', 'hospitals'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveSubTab(tab as any)}
@@ -679,22 +712,39 @@ function AdminView({ language, db, logout }: { language: Language, db: any, logo
                <h3 className="text-6xl font-black text-white leading-none">{patients.length}</h3>
             </div>
             <div className="bg-white/5 p-8 rounded-[2rem] border border-white/5">
-               <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-4">{t.hospitals_management}</p>
+               <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-4">{t.hospitals_management || "HÔPITAUX"}</p>
                <h3 className="text-6xl font-black text-white leading-none">{hospitals.length}</h3>
             </div>
          </div>
        )}
 
        {activeSubTab === 'patients' && (
-         <div className="bg-white/5 p-8 rounded-[2rem] border border-white/5">
-            <h2 className="text-xl font-black text-white mb-6 uppercase tracking-widest">{t.all_patients}</h2>
-            <div className="space-y-4">
-              {patients.map(p => (
-                <div key={p.id} className="flex justify-between items-center p-4 bg-white/5 rounded-xl border border-white/5">
-                  <span className="font-bold text-white">{p.name}</span>
-                  <span className="text-xs text-white/50">{p.id}</span>
-                </div>
-              ))}
+         <div className="space-y-6">
+            <div className="bg-white/5 p-8 rounded-[2rem] border border-white/5">
+               <h2 className="text-xl font-black text-white mb-6 uppercase tracking-widest">Ajouter une patiente</h2>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <input placeholder="Nom Complet" className="bg-white/10 p-4 rounded-xl text-white outline-none focus:ring-2 focus:ring-brand-primary" value={newPatient.name} onChange={e => setNewPatient({...newPatient, name: e.target.value})} />
+                  <input placeholder="Téléphone" className="bg-white/10 p-4 rounded-xl text-white outline-none focus:ring-2 focus:ring-brand-primary" value={newPatient.phone} onChange={e => setNewPatient({...newPatient, phone: e.target.value})} />
+                  <input type="date" title="Date des dernières règles" className="bg-white/10 p-4 rounded-xl text-white outline-none focus:ring-2 focus:ring-brand-primary" value={newPatient.lmp} onChange={e => setNewPatient({...newPatient, lmp: e.target.value})} />
+                  <select className="bg-white/10 p-4 rounded-xl text-white outline-none focus:ring-2 focus:ring-brand-primary" value={newPatient.hospitalId} onChange={e => setNewPatient({...newPatient, hospitalId: e.target.value})}>
+                     <option value="" disabled>Sélectionner un hôpital</option>
+                     {hospitals.map(h => (
+                        <option key={h.id} value={h.id} className="bg-gray-900">{h.name}</option>
+                     ))}
+                  </select>
+               </div>
+               <button onClick={handleAddPatient} className="mt-6 px-6 py-3 bg-brand-primary text-gray-900 rounded-xl font-black uppercase tracking-widest transition-all hover:scale-105 active:scale-95 shadow-lg shadow-brand-primary/20">Ajouter Patient</button>
+            </div>
+            <div className="bg-white/5 p-8 rounded-[2rem] border border-white/5">
+               <h2 className="text-xl font-black text-white mb-6 uppercase tracking-widest">{t.all_patients}</h2>
+               <div className="space-y-4">
+                 {patients.map(p => (
+                   <div key={p.id} className="flex justify-between items-center p-4 bg-white/5 rounded-xl border border-white/5">
+                     <span className="font-bold text-white">{p.name || p.id}</span>
+                     <span className="text-xs text-white/50">{p.phone}</span>
+                   </div>
+                 ))}
+               </div>
             </div>
          </div>
        )}
@@ -731,6 +781,7 @@ function AdminView({ language, db, logout }: { language: Language, db: any, logo
 
 export default function App() {
   const { user, loading, googleLogin, logout: googleLogout } = useAuth();
+  const { hospitals: globalHospitals } = useHospitals();
   const [patient, setPatient] = useState<Patient | null>(null);
   const [activeTab, setActiveTab] = useState<'home' | 'checkup' | 'education' | 'profile' | 'record' | 'admin'>('home');
   const [isAdmin, setIsAdmin] = useState(false);
@@ -1010,7 +1061,7 @@ export default function App() {
   }
 
   if (showOnboarding) {
-    return <Onboarding onRegister={handleRegister} language={language} initialName={pendingName || ''} isLoading={isRegistering} error={error} />;
+    return <Onboarding onRegister={handleRegister} language={language} initialName={pendingName || ''} isLoading={isRegistering} error={error} hospitals={globalHospitals} />;
   }
 
   if (!user || !patient) {
@@ -1036,8 +1087,8 @@ export default function App() {
              {!isAdmin && (
               <button 
                onClick={() => {
-                 const hospital = HOSPITALS.find(h => h.id === (patient as any).assignedHospitalId);
-                 if (hospital) window.location.href = `tel:${hospital.emergencyContact}`;
+                 const hospital = globalHospitals.find(h => h.id === (patient as any).assignedHospitalId);
+                 if (hospital) window.location.href = `tel:${hospital.emergencyContact || hospital.phone}`;
                }}
                className="bg-red-400/10 text-red-400 p-2.5 rounded-xl hover:bg-red-400/20 transition-colors shadow-lg"
                title={(translations[language] as any).call_hospital}
@@ -1240,17 +1291,23 @@ function Login({ onLogin, language, isLoading, error }: { onLogin: (name: string
   );
 }
 
-function Onboarding({ onRegister, language, initialName, isLoading, error: parentError }: { onRegister: (name: string, phone: string, lmp: string, hospitalId: string) => void, language: Language, initialName: string, isLoading: boolean, error: string | null }) {
+function Onboarding({ onRegister, language, initialName, isLoading, error: parentError, hospitals }: { onRegister: (name: string, phone: string, lmp: string, hospitalId: string) => void, language: Language, initialName: string, isLoading: boolean, error: string | null, hospitals: Hospital[] }) {
   const t = translations[language];
   const [formData, setFormData] = useState({
     name: initialName || '',
     phone: '',
     lmp: '',
-    hospitalId: HOSPITALS[0].id
+    hospitalId: hospitals[0]?.id || ''
   });
   const [localError, setLocalError] = useState('');
   const [step, setStep] = useState(1);
   const totalSteps = 3;
+
+  useEffect(() => {
+    if (hospitals.length > 0 && !formData.hospitalId) {
+      setFormData(prev => ({ ...prev, hospitalId: hospitals[0].id }));
+    }
+  }, [hospitals]);
 
   const displayError = localError || parentError;
 
@@ -1386,7 +1443,7 @@ function Onboarding({ onRegister, language, initialName, isLoading, error: paren
                     onChange={(e) => setFormData({...formData, hospitalId: e.target.value})}
                     disabled={isLoading}
                   >
-                    {HOSPITALS.map(h => (
+                    {hospitals.map(h => (
                       <option key={h.id} value={h.id} className="bg-gray-900">{h.name}</option>
                     ))}
                   </select>
@@ -1957,7 +2014,8 @@ function EducationView({ language, weeksPregnant }: { language: Language, weeksP
 function ProfileView({ patient, logs, onLogout, language, onTabChange }: { patient: Patient, logs: CheckupLog[], onLogout: () => void, language: Language, onTabChange: (tab: any) => void }) {
   const t = translations[language];
   const [showQR, setShowQR] = useState(false);
-  const hospital = HOSPITALS.find(h => h.id === patient.assignedHospitalId);
+  const { hospitals } = useHospitals();
+  const hospital = hospitals.find(h => h.id === patient.assignedHospitalId);
 
   // Robust QR Code Generation
   const stringifyData = JSON.stringify({ 
@@ -2039,8 +2097,8 @@ function ProfileView({ patient, logs, onLogout, language, onTabChange }: { patie
               {!patient.isAdmin && (
                 <button 
                   onClick={() => {
-                    const hospital = HOSPITALS.find(h => h.id === (patient as any).assignedHospitalId);
-                    if (hospital) window.location.href = `tel:${hospital.emergencyContact}`;
+                    const hospital = hospitals.find(h => h.id === (patient as any).assignedHospitalId);
+                    if (hospital) window.location.href = `tel:${hospital.emergencyContact || hospital.phone}`;
                   }}
                   className="text-[9px] md:text-[10px] font-black text-red-400 uppercase tracking-widest flex items-center gap-2 bg-red-400/10 px-4 py-2 rounded-full border border-red-400/20"
                 >
@@ -2244,7 +2302,8 @@ function ProfileView({ patient, logs, onLogout, language, onTabChange }: { patie
 
 function RecordView({ patient, logs, language, onBack }: { patient: Patient, logs: CheckupLog[], language: Language, onBack: () => void }) {
   const t = translations[language];
-  const hospital = HOSPITALS.find(h => h.id === patient.assignedHospitalId);
+  const { hospitals } = useHospitals();
+  const hospital = hospitals.find(h => h.id === patient.assignedHospitalId);
 
   return (
     <div className="p-4 md:p-8 space-y-8 bg-gray-900 min-h-screen">
