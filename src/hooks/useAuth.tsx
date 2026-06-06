@@ -15,7 +15,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   googleLogin: () => Promise<void>;
-  anonymousLogin: () => Promise<void>;
+  anonymousLogin: () => Promise<any>;
   emailLogin: (email: string, password: string) => Promise<User | null>;
   emailSignUp: (email: string, password: string) => Promise<User | null>;
   logout: () => Promise<void>;
@@ -47,7 +47,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const anonymousLogin = async () => {
     try {
-      await signInAnonymously(auth);
+      const credential = await signInAnonymously(auth);
+      return credential;
     } catch (error: any) {
       console.error('Anonymous login error:', error);
       throw error;

@@ -67,6 +67,7 @@ import {
   serverTimestamp,
   where,
   getDocs,
+  limit,
   arrayUnion,
 } from "firebase/firestore";
 
@@ -614,9 +615,22 @@ export default function App() {
 
   const syncUserProfile = async (uid: string) => {
     try {
-      const profileSnap = await getDoc(doc(db, "users", uid));
+      // First try by document ID (old way/patients)
+      let profileSnap = await getDoc(doc(db, "users", uid));
+      let p: any = null;
+
       if (profileSnap.exists()) {
-        const p = profileSnap.data();
+        p = profileSnap.data();
+      } else {
+        // Try querying by 'uid' field (for admin/hospital staff linked via anonymous login)
+        const q = query(collection(db, "users"), where("uid", "==", uid), limit(1));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          p = snap.docs[0].data();
+        }
+      }
+
+      if (p) {
         if (p.role === "admin" || p.isAdmin) {
           setIsAdmin(true);
           setIsHospital(false);
@@ -873,10 +887,16 @@ export default function App() {
     }
   };
 
-  if (loading) {
+  if (loading || (user && !patient && !error)) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <Loader2 className="text-brand-primary animate-spin" size={48} />
+      <div className="min-h-screen bg-[#0b0f1a] flex flex-col items-center justify-center gap-6">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-brand-primary/20 rounded-full animate-pulse" />
+          <div className="absolute inset-0 w-16 h-16 border-t-4 border-brand-primary rounded-full animate-spin" />
+        </div>
+        <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.4em] animate-pulse italic">
+          Synchronisation Uzazi...
+        </p>
       </div>
     );
   }
@@ -894,7 +914,7 @@ export default function App() {
     );
   }
 
-  if (!user || !patient) {
+  if (!user) {
     return (
       <Login
         onLogin={handleLogin}
@@ -924,6 +944,21 @@ export default function App() {
         />
       </div>
     );
+  }
+
+  if (!patient && error) {
+    return (
+      <Login
+        onLogin={handleLogin}
+        language={language}
+        isLoading={false}
+        error={error}
+      />
+    );
+  }
+
+  if (!patient) {
+    return null; // Should be covered by loading state above
   }
 
   return (
@@ -1245,42 +1280,74 @@ function Login({
     setError(null);
     setIsLoading(true);
 
-    const trimmedEmail = email.trim();
+    const trimmedEmail = email.trim(); // This is now the "Identifier"
     const trimmedPassword = password.trim();
 
     if (!trimmedEmail || !trimmedPassword) {
-      setError("Veuillez remplir l'e-mail et le mot de passe.");
+      setError("Veuillez remplir le nom et le mot de passe.");
       setIsLoading(false);
       return;
     }
     
-    if (trimmedPassword.length < 6) {
-      setError("Le mot de passe doit comporter au moins 6 caractères.");
-      setIsLoading(false);
-      return;
-    }
-
     try {
-      let loggedInUser = null;
-
       if (sessionType === "admin") {
-        loggedInUser = await emailLogin(trimmedEmail, trimmedPassword);
-      } else if (sessionType === "hospital") {
-        if (authMode === "signup") {
-          throw new Error("L'inscription pour les hôpitaux doit être effectuée par un administrateur.");
+        if (trimmedEmail.toLowerCase() === "admin" && trimmedPassword === "@Prince21") {
+          const cred = await anonymousLogin();
+          // Profile update for admin
+          await setDoc(doc(db, "users", "admin-profile"), {
+            name: "Administrateur",
+            role: "admin",
+            isAdmin: true,
+            uid: cred.user.uid,
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+          window.location.reload();
+          return;
+        } else {
+          try {
+            await emailLogin(trimmedEmail, trimmedPassword);
+            window.location.reload();
+            return;
+          } catch (e) {
+             throw new Error("Identifiants administrateur incorrects.");
+          }
         }
-        loggedInUser = await emailLogin(trimmedEmail, trimmedPassword);
+      } else if (sessionType === "hospital") {
+        const q = query(
+          collection(db, "users"),
+          where("role", "==", "hospital"),
+          where("name", "==", trimmedEmail),
+          where("password", "==", trimmedPassword),
+          limit(1)
+        );
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const staffDoc = snap.docs[0];
+          const cred = await anonymousLogin();
+          // Link UID
+          await updateDoc(doc(db, "users", staffDoc.id), {
+            uid: cred.user.uid,
+            updatedAt: serverTimestamp()
+          });
+          window.location.reload();
+          return;
+        } else {
+          try {
+             await emailLogin(trimmedEmail, trimmedPassword);
+             window.location.reload();
+             return;
+          } catch (e) {
+             throw new Error("Identifiants hospitaliers incorrects.");
+          }
+        }
       } else {
         throw new Error("L'authentification par e-mail n'est pas disponible pour les patientes.");
       }
-
-      if (loggedInUser) {
-        // Success! Reload will trigger syncUserProfile via useEffect
-        window.location.reload();
-      }
     } catch (err: any) {
       console.error(err);
-      if (err.code === "auth/operation-not-allowed" || err.message?.includes("operation-not-allowed")) {
+      if (err.code === "auth/network-request-failed" || err.message?.includes("network-request-failed")) {
+        setError("Erreur réseau : Impossible de contacter Firebase. Veuillez vérifier votre connexion internet et vous assurer que l'Authentification ANONYME est activée dans la console Firebase.");
+      } else if (err.code === "auth/operation-not-allowed" || err.message?.includes("operation-not-allowed")) {
         if (sessionType === "admin" || sessionType === "hospital") {
           setError("L'authentification par e-mail n'est pas activée. Veuillez l'activer dans la console Firebase (Authentification > Sign-in method).");
         } else {
@@ -1433,13 +1500,13 @@ function Login({
 
               <div className="space-y-2">
                 <label className="block text-[10px] font-black text-brand-primary uppercase tracking-[0.3em] font-sans italic">
-                  Adresse e-mail
+                  Identifiant / Nom
                 </label>
                 <input
-                  type="email"
+                  type="text"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="docteur@clinique.org"
+                  placeholder={sessionType === "admin" ? "admin" : "Ex: Dr. Bamba"}
                   className="w-full px-5 py-3.5 rounded-2xl border border-white/5 bg-white/5 text-white placeholder-gray-600 focus:bg-white/10 focus:ring-2 focus:ring-brand-primary focus:outline-none font-bold"
                   disabled={isFormLoading}
                 />
@@ -4119,6 +4186,7 @@ function AdminView({
   const handleStartEditStaff = (staff: any) => {
     setNewStaffName(staff.name);
     setNewStaffEmail(staff.email);
+    setNewStaffPassword(staff.password || "");
     setSelectedHospitalIdForStaff(staff.assignedHospitalId || "");
     setEditingStaff(staff);
     setShowAddStaff(true);
@@ -4136,6 +4204,7 @@ function AdminView({
         await updateDoc(doc(db, "users", editingStaff.id), {
           name: newStaffName,
           email: newStaffEmail,
+          password: newStaffPassword,
           assignedHospitalId: selectedHospitalIdForStaff,
           updatedAt: serverTimestamp(),
         });
@@ -4145,6 +4214,7 @@ function AdminView({
         await addDoc(collection(db, "users"), {
           name: newStaffName,
           email: newStaffEmail,
+          password: newStaffPassword,
           role: "hospital",
           assignedHospitalId: selectedHospitalIdForStaff,
           createdAt: serverTimestamp(),
