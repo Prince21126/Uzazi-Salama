@@ -16,6 +16,9 @@
         "assignedHospitalId": { "type": "string" },
         "language": { "type": "string", "enum": ["fr", "en", "sw"] },
         "isAdmin": { "type": "boolean" },
+        "waterGoal": { "type": "number" },
+        "waterIntakeToday": { "type": "number" },
+        "waterTodayDate": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },

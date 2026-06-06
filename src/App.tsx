@@ -48,6 +48,10 @@ import slugify from 'slugify';
 import { db, auth } from './lib/firebase';
 import { useAuth } from './hooks/useAuth';
 import { useHospitals } from './hooks/useHospitals';
+import ContractionTracker from './components/ContractionTracker';
+import ClinicalCharts from './components/ClinicalCharts';
+import HydrationTracker from './components/HydrationTracker';
+import BabySizeAnalogy from './components/BabySizeAnalogy';
 import { 
   doc, 
   getDoc, 
@@ -821,7 +825,7 @@ function AdminView({ language, db, logout }: { language: Language, db: any, logo
 // --- Main App Component ---
 
 export default function App() {
-  const { user, loading, googleLogin, logout: googleLogout } = useAuth();
+  const { user, loading, googleLogin, anonymousLogin, logout: googleLogout } = useAuth();
   const { hospitals: globalHospitals } = useHospitals();
   const [patient, setPatient] = useState<Patient | null>(null);
   const [activeTab, setActiveTab] = useState<'home' | 'checkup' | 'education' | 'profile' | 'record' | 'admin'>('home');
@@ -838,7 +842,7 @@ export default function App() {
 
   // Logic to load data on mount
   useEffect(() => {
-    if (!user || !patient?.id) return;
+    if (!user || !patient?.id || patient.id === '@admin') return;
 
     // Sync patient data
     const unsubPatient = onSnapshot(doc(db, 'users', patient.id), (snap) => {
@@ -880,9 +884,9 @@ export default function App() {
       console.log('handleLogin started with name:', rawName);
       try {
         if (!user) {
-          console.log('Not logged in, calling googleLogin');
-          await googleLogin();
-          console.log('googleLogin completed successfully, waiting for auth state');
+          console.log('Not logged in, calling anonymousLogin');
+          await anonymousLogin();
+          console.log('anonymousLogin completed successfully, waiting for auth state');
           await new Promise(resolve => setTimeout(resolve, 1000)); // Delay to allow auth state update
           console.log('Auth check:', auth.currentUser ? 'Auth' : 'No Auth');
         } else {
@@ -897,10 +901,34 @@ export default function App() {
       
       if (rawName.toLowerCase() === '@admin') {
          console.log('Admin login detected');
+         const currentUid = auth.currentUser?.uid;
+         if (currentUid) {
+           try {
+             await setDoc(doc(db, 'users', 'admin-bypass'), {
+               id: 'admin-bypass',
+               name: 'Admin',
+               email: '',
+               phone: '00000000',
+               weight: 0,
+               lastPeriodDate: new Date().toISOString(),
+               dueDate: new Date().toISOString(),
+               weeksPregnant: 0,
+               assignedHospitalId: '',
+               language: language,
+               isAdmin: true,
+               uid: currentUid,
+               createdAt: serverTimestamp(),
+               updatedAt: serverTimestamp()
+             });
+             console.log('Admin-bypass document updated with UID:', currentUid);
+           } catch (adminDocErr) {
+             console.error('Could not set admin-bypass document:', adminDocErr);
+           }
+         }
          setIsAdmin(true);
          setActiveTab('admin');
          setShowOnboarding(false);
-         setPatient({ id: '@admin', name: '@admin', isAdmin: true } as any);
+         setPatient({ id: '@admin', name: '@admin', isAdmin: true, uid: currentUid } as any);
          return;
       }
       
@@ -912,6 +940,18 @@ export default function App() {
       if (userDoc.exists()) {
         const p = userDoc.data() as Patient;
         p.id = slug;
+        if (user && p.uid !== user.uid) {
+          p.uid = user.uid;
+          try {
+            await updateDoc(doc(db, 'users', slug), {
+              uid: user.uid,
+              updatedAt: serverTimestamp()
+            });
+            console.log('Successfully bound user UID to existing patient doc');
+          } catch (bindErr) {
+            console.error('Failed to bind UID to existing patient:', bindErr);
+          }
+        }
         setPatient(p);
         setIsAdmin(!!p.isAdmin);
         if (p.language) setLanguage(p.language as Language);
@@ -1044,6 +1084,7 @@ export default function App() {
         assignedHospitalId: hospitalId,
         language: language,
         isAdmin: false,
+        uid: user.uid,
       };
       
       console.log('Attempting to set doc:', `users/${slug}`);
@@ -1211,6 +1252,10 @@ export default function App() {
                 onTabChange={setActiveTab} 
                 isAnalyzing={isAnalyzing}
                 language={language}
+                onUpdatePatient={(updated) => {
+                  setPatient(updated);
+                  localStorage.setItem('uzazi_patient', JSON.stringify(updated));
+                }}
               />
             </motion.div>
           )}
@@ -1553,13 +1598,15 @@ function HomeView({
   lastLog, 
   onTabChange, 
   isAnalyzing,
-  language
+  language,
+  onUpdatePatient
 }: { 
   patient: Patient, 
   lastLog?: CheckupLog, 
   onTabChange: (tab: string) => void,
   isAnalyzing?: boolean,
-  language: Language
+  language: Language,
+  onUpdatePatient: (updated: Patient) => void
 }) {
   const t = translations[language];
   const weeksRemaining = 40 - patient.weeksPregnant;
@@ -1690,6 +1737,13 @@ function HomeView({
             <div className="absolute top-0 right-0 w-64 h-64 bg-brand-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
           </motion.div>
 
+          {/* Hydration Tracker */}
+          <HydrationTracker 
+            patient={patient}
+            language={language}
+            onUpdatePatient={onUpdatePatient}
+          />
+
           {/* Action CTA */}
           <motion.button 
             whileHover={{ scale: 1.02, y: -2 }}
@@ -1704,6 +1758,9 @@ function HomeView({
 
         {/* Right Column: Information & Daily Tip */}
         <div className="lg:col-span-5 space-y-8">
+          {/* Baby Size Agricultural Analogy */}
+          <BabySizeAnalogy weeksPregnant={patient.weeksPregnant} language={language} />
+
           <div className="px-4">
              <h4 className="text-[10px] font-black uppercase text-brand-primary/70 tracking-[0.4em] italic">{t.current_health}</h4>
           </div>
@@ -2080,6 +2137,7 @@ function EducationView({ language, weeksPregnant }: { language: Language, weeksP
 function ProfileView({ patient, logs, onLogout, language, onTabChange }: { patient: Patient, logs: CheckupLog[], onLogout: () => void, language: Language, onTabChange: (tab: any) => void }) {
   const t = translations[language];
   const [showQR, setShowQR] = useState(false);
+  const [showContractionTracker, setShowContractionTracker] = useState(false);
   const { hospitals } = useHospitals();
   const hospital = hospitals.find(h => h.id === patient.assignedHospitalId);
 
@@ -2103,6 +2161,22 @@ function ProfileView({ patient, logs, onLogout, language, onTabChange }: { patie
 
   return (
     <div className="p-4 md:p-8 space-y-8 pb-32 max-w-6xl mx-auto w-full">
+      {/* Contraction Tracker Overlay */}
+      <AnimatePresence>
+        {showContractionTracker && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 overflow-y-auto">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="w-full max-w-xl"
+            >
+              <ContractionTracker language={language} onClose={() => setShowContractionTracker(false)} />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Profil Header Adaptive */}
       <motion.div 
         initial={{ opacity: 0, scale: 0.9 }}
@@ -2194,14 +2268,20 @@ function ProfileView({ patient, logs, onLogout, language, onTabChange }: { patie
                 <p className="text-xl md:text-2xl font-black text-white">{patient.bloodPressure || "—"}</p>
               </div>
 
-              <div className="bg-white/10/20 p-6 rounded-[2.5rem] border border-white/5 flex flex-col items-center justify-center text-center opacity-40 aspect-square lg:aspect-auto">
-                <div className="w-12 h-12 bg-purple-400/10 text-purple-400 rounded-2xl flex items-center justify-center mb-4">
+              <div 
+                onClick={() => setShowContractionTracker(true)}
+                className="bg-white/10/20 p-6 rounded-[2.5rem] border border-white/5 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-white/10 group transition-all aspect-square lg:aspect-auto"
+              >
+                <div className="w-12 h-12 bg-purple-400/10 text-purple-400 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg">
                   <Clock size={24} />
                 </div>
                 <p className="text-[10px] font-black text-brand-primary/70 uppercase tracking-widest mb-1 italic">{t.contractions}</p>
-                <p className="text-sm font-black text-white italic">{t.soon}</p>
+                <p className="text-sm font-black text-white group-hover:text-brand-primary transition-colors">{t.start_counting}</p>
               </div>
            </div>
+
+           {/* Medical Charts of weight and BP progression */}
+           <ClinicalCharts logs={logs} language={language} initialWeight={patient.weight} />
 
            <div className="space-y-4">
               <h4 className="text-[10px] font-black uppercase text-brand-primary/70 tracking-[0.4em] px-4 italic">{t.medical_file}</h4>

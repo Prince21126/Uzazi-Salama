@@ -14,6 +14,10 @@ export interface Patient {
   assignedHospitalId: string;
   language?: Language;
   isAdmin?: boolean;
+  uid?: string;
+  waterGoal?: number; // Daily goal in ml
+  waterIntakeToday?: number; // Current intake today in ml
+  waterTodayDate?: string; // Date of the current tracker e.g. YYYY-MM-DD
 }
 
 export interface CheckupLog {
