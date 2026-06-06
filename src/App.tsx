@@ -683,7 +683,6 @@ export default function App() {
     localStorage.removeItem("uzazi_logs");
     localStorage.removeItem("uzazi_hospital_staff");
     localStorage.removeItem("uzazi_saved_name");
-    window.location.reload();
   };
 
   useEffect(() => {
@@ -1308,12 +1307,10 @@ function Login({
             uid: cred.user.uid,
             updatedAt: serverTimestamp()
           }, { merge: true });
-          window.location.reload();
           return;
         } else {
           try {
             await emailLogin(trimmedEmail, trimmedPassword);
-            window.location.reload();
             return;
           } catch (e) {
              throw new Error("Identifiants administrateur incorrects.");
@@ -1323,7 +1320,7 @@ function Login({
         const q = query(
           collection(db, "users"),
           where("role", "==", "hospital"),
-          where("name", "==", trimmedEmail),
+          where("email", "==", trimmedEmail),
           where("password", "==", trimmedPassword),
           limit(1)
         );
@@ -1336,12 +1333,10 @@ function Login({
             uid: cred.user.uid,
             updatedAt: serverTimestamp()
           });
-          window.location.reload();
           return;
         } else {
           try {
              await emailLogin(trimmedEmail, trimmedPassword);
-             window.location.reload();
              return;
           } catch (e) {
              throw new Error("Identifiants hospitaliers incorrects.");
@@ -1395,7 +1390,7 @@ function Login({
         </div>
 
         {/* Choice of session button group */}
-        <div className="bg-white/5 p-1.5 rounded-2xl border border-white/10 flex grid grid-cols-3 gap-1">
+        <div className="bg-white/5 p-1.5 rounded-2xl border border-white/10 grid grid-cols-1 sm:grid-cols-3 gap-1">
           <button
             onClick={() => {
               setSessionType("patient");
@@ -1498,13 +1493,13 @@ function Login({
 
               <div className="space-y-2">
                 <label className="block text-[10px] font-black text-brand-primary uppercase tracking-[0.3em] font-sans italic">
-                  Identifiant / Nom
+                  Identifiant / Email
                 </label>
                 <input
                   type="text"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder={sessionType === "admin" ? "admin" : "Ex: Dr. Bamba"}
+                  placeholder={sessionType === "admin" ? "admin" : "Ex: email@hopital.com"}
                   className="w-full px-5 py-3.5 rounded-2xl border border-white/5 bg-white/5 text-white placeholder-gray-600 focus:bg-white/10 focus:ring-2 focus:ring-brand-primary focus:outline-none font-bold"
                   disabled={isFormLoading}
                 />
@@ -3328,7 +3323,14 @@ function HospitalView({
 
   // Show forms
   const [showAddPatient, setShowAddPatient] = useState(false);
-  const [activeDetailsTab, setActiveDetailsTab] = useState<"bilan" | "prescription">("bilan");
+  const [activeDetailsTab, setActiveDetailsTab] = useState<"bilan" | "prescription" | "historique">("bilan");
+
+  // Patient editing state
+  const [isEditingPatient, setIsEditingPatient] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editWeeks, setEditWeeks] = useState(0);
+  const [updatingPatient, setUpdatingPatient] = useState(false);
 
   // New Patient Form state
   const [patName, setPatName] = useState("");
@@ -3593,6 +3595,56 @@ function HospitalView({
     }
   };
 
+  const handleStartEditPatient = (p: Patient) => {
+    setEditName(p.name);
+    setEditPhone(p.phone);
+    setEditWeeks(p.weeksPregnant);
+    setIsEditingPatient(true);
+  };
+
+  const handleUpdatePatient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPatient) return;
+    setUpdatingPatient(true);
+    try {
+      await updateDoc(doc(db, "users", selectedPatient.id), {
+        name: editName.trim(),
+        phone: editPhone.trim(),
+        weeksPregnant: Number(editWeeks),
+        updatedAt: serverTimestamp(),
+      });
+      setIsEditingPatient(false);
+      alert("Informations patiente mises à jour.");
+    } catch (err) {
+      console.error(err);
+      alert("Erreur lors de la mise à jour.");
+    } finally {
+      setUpdatingPatient(false);
+    }
+  };
+
+  const handleDeletePatient = async (pId: string) => {
+    if (!confirm("Voulez-vous vraiment supprimer cette patiente ainsi que tout son historique ? Cette action est irréversible.")) return;
+    try {
+      await deleteDoc(doc(db, "users", pId));
+      if (selectedPatient?.id === pId) setSelectedPatient(null);
+    } catch (err) {
+      console.error(err);
+      alert("Erreur lors de la suppression.");
+    }
+  };
+
+  const handleDeleteLog = async (logId: string) => {
+    if (!selectedPatient) return;
+    if (!confirm("Supprimer cette observation de l'historique ?")) return;
+    try {
+      await deleteDoc(doc(db, "users", selectedPatient.id, "logs", logId));
+    } catch (err) {
+      console.error(err);
+      alert("Erreur lors de la suppression du log.");
+    }
+  };
+
   // Compute key stats for dashboard
   const totalPatientsCount = patients.length;
   const criticalCount = patients.filter((p) => p.bloodPressure && (parseFloat(p.bloodPressure.split("/")[0]) >= 140)).length;
@@ -3704,27 +3756,7 @@ function HospitalView({
           </form>
         )}
 
-        {/* Dashboard clinical analytics */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white/5 p-5 rounded-[2rem] border border-white/5">
-            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Patientes de l'établissement</p>
-            <p className="text-3xl font-black text-white">{totalPatientsCount}</p>
-          </div>
-          <div className="bg-green-500/10 p-5 rounded-[2rem] border border-green-500/10">
-            <p className="text-[9px] font-black text-green-400 uppercase tracking-widest mb-1">Patientes Stables</p>
-            <p className="text-3xl font-black text-green-400">{stableCount}</p>
-          </div>
-          <div className="bg-yellow-400/10 p-5 rounded-[2rem] border border-yellow-400/10">
-            <p className="text-[9px] font-black text-yellow-500 uppercase tracking-widest mb-1">Alerte Retard DPA (&gt;40 SA)</p>
-            <p className="text-3xl font-black text-yellow-500">{warningCount}</p>
-          </div>
-          <div className="bg-red-500/10 p-5 rounded-[2rem] border border-red-500/10">
-            <p className="text-[9px] font-black text-red-400 uppercase tracking-widest mb-1">Tension Élevée (&gt;=140 Sys)</p>
-            <p className="text-3xl font-black text-red-400">{criticalCount}</p>
-          </div>
-        </div>
-
-        {/* Core Layout split: Inline Adaptive Accordion List */}
+        {/* Layout split: Inline Adaptive Accordion List */}
         <div className="flex flex-col gap-8">
           {/* Action Bar */}
           <div className="flex flex-col sm:flex-row justify-between gap-4 items-stretch sm:items-center">
@@ -4584,21 +4616,22 @@ function AdminView({
 
   return (
     <div className="bg-gray-900 border border-white/5 rounded-[3rem] p-6 lg:p-10 text-white shadow-2xl relative">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4 pb-6 border-b border-white/5">
-        <div>
-          <h2 className="text-2xl md:text-3xl font-display font-black tracking-tight uppercase">
-            Personnel Hospitalier — Uzazi Salama
+      <header className="flex flex-row items-start sm:items-center justify-between gap-2 sm:gap-4 mb-4 pb-6 border-b border-white/5">
+        <div className="flex-1 min-w-0 pr-4">
+          <h2 className="text-lg sm:text-2xl md:text-3xl font-display font-black tracking-tight uppercase leading-tight">
+            Administration Uzazi Salama
           </h2>
-          <p className="text-[10px] text-brand-primary/60 font-black tracking-widest mt-1 uppercase">
-            Administration clinique du Sud-Kivu
+          <p className="text-[8px] sm:text-[10px] text-brand-primary/60 font-black tracking-widest mt-1 uppercase">
+            Gestion du réseau hospitalier
           </p>
         </div>
         <button
           onClick={logout}
-          className="flex items-center gap-2 self-start md:self-center bg-red-400/10 text-red-400 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-red-400/20 hover:bg-red-400/20 transition-all shadow-md"
+          className="flex items-center gap-2 shrink-0 self-start sm:self-center bg-red-400/10 text-red-400 px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest border border-red-400/20 hover:bg-red-400/20 transition-all shadow-md whitespace-nowrap"
         >
           <LogOut size={14} />
-          Se déconnecter
+          <span className="hidden sm:inline">Se déconnecter</span>
+          <span className="inline sm:hidden">Quitter</span>
         </button>
       </header>
 
@@ -4648,9 +4681,9 @@ function AdminView({
             </button>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+          <div className="flex flex-col lg:flex-row gap-8 items-start">
             {showAddStaff && (
-              <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/10 space-y-5 text-left">
+              <div className="w-full lg:w-1/3 shrink-0 bg-white/5 p-6 rounded-[2.5rem] border border-white/10 space-y-5 text-left">
                 <h4 className="text-xs font-black uppercase text-brand-primary tracking-widest">
                   {editingStaff ? "Modification du compte" : "Création de compte Praticien"}
                 </h4>
@@ -4709,7 +4742,7 @@ function AdminView({
               </div>
             )}
 
-            <div className={showAddStaff ? "space-y-3" : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"}>
+            <div className={`w-full ${showAddStaff ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"}`}>
               {loadingStaff ? (
                 <p className="text-gray-500 italic text-xs">Chargement du personnel...</p>
               ) : hospitalStaff.length === 0 ? (
@@ -4760,40 +4793,6 @@ function AdminView({
 
       {adminTab === "patients" && (
         <>
-            {/* Stats Counter */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <div className="bg-white/5 border border-white/5 p-5 rounded-[2rem] shadow-lg">
-              <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest mb-1">
-                Total Patientes
-              </p>
-              <p className="text-3xl font-bold text-white">{patients.length}</p>
-            </div>
-            <div className="bg-red-500/10 border border-red-500/10 p-5 rounded-[2rem] shadow-lg">
-              <p className="text-[9px] font-black uppercase text-red-400 tracking-widest mb-1">
-                Urgences (Critiques)
-              </p>
-              <p className="text-3xl font-bold text-red-500">
-                {patients.filter((p) => getPatientStatus(p) === "critical").length}
-              </p>
-            </div>
-            <div className="bg-amber-500/10 border border-amber-500/10 p-5 rounded-[2rem] shadow-lg">
-              <p className="text-[9px] font-black uppercase text-amber-400 tracking-widest mb-1">
-                Vigilance (Alerte)
-              </p>
-              <p className="text-3xl font-bold text-amber-500">
-                {patients.filter((p) => getPatientStatus(p) === "warning").length}
-              </p>
-            </div>
-            <div className="bg-green-500/10 border border-green-500/10 p-5 rounded-[2rem] shadow-lg">
-              <p className="text-[9px] font-black uppercase text-green-400 tracking-widest mb-1">
-                Stables (Normales)
-              </p>
-              <p className="text-3xl font-bold text-green-500">
-                {patients.filter((p) => getPatientStatus(p) === "stable").length}
-              </p>
-            </div>
-          </div>
-
           <div className="flex flex-col gap-6">
             {/* Search & Filters Section */}
             <div className="space-y-4">
