@@ -615,19 +615,16 @@ export default function App() {
 
   const syncUserProfile = async (uid: string) => {
     try {
-      // First try by document ID (old way/patients)
-      let profileSnap = await getDoc(doc(db, "users", uid));
+      // Try querying by 'uid' field (for admin/hospital staff linked via anonymous login)
+      const q = query(collection(db, "users"), where("uid", "==", uid), limit(1));
+      const snap = await getDocs(q);
       let p: any = null;
-
-      if (profileSnap.exists()) {
-        p = profileSnap.data();
+      if (!snap.empty) {
+        p = snap.docs[0].data();
       } else {
-        // Try querying by 'uid' field (for admin/hospital staff linked via anonymous login)
-        const q = query(collection(db, "users"), where("uid", "==", uid), limit(1));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          p = snap.docs[0].data();
-        }
+        // Fallback to legacy/direct doc lookup if needed
+        const profileSnap = await getDoc(doc(db, "users", uid));
+        if (profileSnap.exists()) p = profileSnap.data();
       }
 
       if (p) {
@@ -656,6 +653,17 @@ export default function App() {
           localStorage.setItem("uzazi_hospital_staff", JSON.stringify(p));
           return true;
         }
+      } else {
+        // If no profile found for this UID, check if we have a saved patient slug in localStorage
+        const savedPatientStr = localStorage.getItem("uzazi_patient");
+        if (savedPatientStr) {
+          const savedPatient = JSON.parse(savedPatientStr);
+          // Only trust it if it belongs to this UID or if we want to restore session
+          if (savedPatient.uid === uid || !savedPatient.uid) {
+             setPatient(savedPatient);
+             return true;
+          }
+        }
       }
       return false;
     } catch (err) {
@@ -680,9 +688,7 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return;
-    if (!user.isAnonymous) {
-      syncUserProfile(user.uid);
-    }
+    syncUserProfile(user.uid);
   }, [user]);
 
   const handleLanguageChange = async (lang: Language) => {
@@ -887,7 +893,8 @@ export default function App() {
     }
   };
 
-  if (loading || (user && !patient && !error)) {
+  const isProfileFound = isAdmin || isHospital || patient;
+  if (loading || (user && !isProfileFound && !error)) {
     return (
       <div className="min-h-screen bg-[#0b0f1a] flex flex-col items-center justify-center gap-6">
         <div className="relative">
@@ -1432,7 +1439,11 @@ function Login({
           )}
 
           {sessionType === "patient" ? (
-            <form onSubmit={handlePatientSubmit} className="space-y-6">
+             <form onSubmit={handlePatientSubmit} className="space-y-6">
+                <div className="text-center pb-2">
+                   <h3 className="text-xs font-black uppercase tracking-widest text-brand-primary">Accès Patient</h3>
+                   <p className="text-[10px] text-gray-500 font-bold mt-1 uppercase italic">Entrez votre nom pour continuer</p>
+                </div>
               <div className="space-y-2">
                 <label className="block text-[10px] font-black text-brand-primary uppercase tracking-[0.3em] font-sans italic">
                   {t.full_name || "Nom Complet"}
@@ -1462,25 +1473,12 @@ function Login({
             </form>
           ) : (
             <form onSubmit={handleEmailSubmit} className="space-y-5">
-              {/* Login mode selector */}
-              {(sessionType !== "patient") && (
-                <div className="flex justify-between border-b border-white/5 pb-3">
-                  <button
-                    type="button"
-                    onClick={() => setAuthMode("login")}
-                    className={`text-xs font-black uppercase tracking-widest pb-1 transition-colors ${authMode === "login" ? "text-brand-primary border-b-2 border-brand-primary" : "text-gray-500 hover:text-gray-300"}`}
-                  >
-                    Connexion
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAuthMode("signup")}
-                    className={`text-xs font-black uppercase tracking-widest pb-1 transition-colors ${authMode === "signup" ? "text-brand-primary border-b-2 border-brand-primary" : "text-gray-500 hover:text-gray-300"}`}
-                  >
-                    S'inscrire (Nouveau)
-                  </button>
-                </div>
-              )}
+              {/* Login only for Admin and Hospital */}
+              <div className="text-center pb-2">
+                <h3 className="text-xs font-black uppercase tracking-widest text-brand-primary">
+                  {sessionType === "admin" ? "Espace Administration" : "Personnel Hospitalier"}
+                </h3>
+              </div>
 
               {authMode === "signup" && (
                 <div className="space-y-2">
@@ -1610,6 +1608,19 @@ function Login({
                 </span>
               </button>
             </form>
+          )}
+
+          {/* Mode Switcher - RESTRICTED TO PATIENT FLOW */}
+          {sessionType === "patient" && (
+            <div className="pt-6 border-t border-white/5 text-center">
+              <button
+                type="button"
+                onClick={() => setAuthMode(authMode === "login" ? "signup" : "login")}
+                className="text-[10px] font-black uppercase tracking-[2px] text-brand-primary hover:brightness-125 transition-all"
+              >
+                {authMode === "login" ? "Inscrivez-vous ici" : "Se connecter"}
+              </button>
+            </div>
           )}
         </div>
       </motion.div>
@@ -3366,8 +3377,8 @@ function HospitalView({
     const unsub = onSnapshot(q, (snap) => {
       const list = snap.docs
         .map((doc) => ({ ...doc.data(), id: doc.id }) as Patient)
-        // filter out other non-prenatal profiles like admin
-        .filter((p) => p.id !== "@admin" && !p.id.startsWith("hospital_"));
+        // filter out other non-prenatal profiles like admin or hospital staff
+        .filter((p) => p.id !== "@admin" && !p.id.startsWith("hospital_") && p.role !== "hospital" && !p.isAdmin);
       setPatients(list);
     }, (error) => {
       console.error("Failed syncing hospital patients:", error);
@@ -3713,396 +3724,375 @@ function HospitalView({
           </div>
         </div>
 
-        {/* Core Layout split: Patients List on the left, Patient Dossier on the right */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          <div className={`space-y-6 ${selectedPatient ? "lg:col-span-6" : "lg:col-span-12"}`}>
-            {/* Action Bar */}
-            <div className="flex flex-col sm:flex-row justify-between gap-4 items-stretch sm:items-center">
-              <div className="flex gap-2">
+        {/* Core Layout split: Inline Adaptive Accordion List */}
+        <div className="flex flex-col gap-8">
+          {/* Action Bar */}
+          <div className="flex flex-col sm:flex-row justify-between gap-4 items-stretch sm:items-center">
+              <div className="flex gap-2 shrink-0">
                 <input
                   type="text"
                   placeholder="Chercher une patiente par Nom / Tél..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="px-5 py-3 rounded-2xl bg-white/5 border border-white/5 text-[12px] focus:outline-none focus:ring-2 focus:ring-brand-primary max-w-sm w-full"
+                  className="px-5 py-3 rounded-2xl bg-white/5 border border-white/5 focus:outline-none focus:ring-2 focus:ring-brand-primary max-w-sm w-full text-[12px]"
                 />
               </div>
 
-              <div className="flex gap-2 items-center">
-                <button
-                  type="button"
-                  onClick={() => setShowAddPatient(!showAddPatient)}
-                  className="px-4 py-3 bg-brand-primary text-gray-900 rounded-2xl font-black text-[11px] uppercase tracking-wider flex items-center gap-2 active:scale-95 transition-transform"
-                >
-                  <Plus size={16} />
-                  Nouvelle Patiente
-                </button>
-              </div>
-            </div>
-
-            {/* Quick Registration Panel */}
-            {showAddPatient && (
-              <form onSubmit={handleRegisterPatient} className="bg-white/5 p-6 rounded-[2.5rem] border border-white/10 space-y-4">
-                <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                  <h4 className="text-xs font-black uppercase text-brand-primary tracking-widest">Enregistrer une nouvelle Patiente (Admission clinique)</h4>
-                  <button type="button" onClick={() => setShowAddPatient(false)} className="text-gray-400 hover:text-white">
-                    <X size={18} />
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[10px] text-gray-400 uppercase font-black">Nom de la future maman *</label>
-                    <input
-                      type="text"
-                      placeholder="Ex: Zawadi Bamba"
-                      required
-                      value={patName}
-                      onChange={(e) => setPatName(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-white/5 rounded-xl border border-white/5 text-[12px] text-white"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] text-gray-400 uppercase font-black">Téléphone de contact *</label>
-                    <input
-                      type="text"
-                      placeholder="Ex: +243..."
-                      required
-                      value={patPhone}
-                      onChange={(e) => setPatPhone(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-white/5 rounded-xl border border-white/5 text-[12px] text-white"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] text-gray-400 uppercase font-black">Date de dernières règles *</label>
-                    <input
-                      type="date"
-                      required
-                      value={patLMP}
-                      onChange={(e) => setPatLMP(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-white/5 rounded-xl border border-white/5 text-[12px] text-white"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] text-gray-400 uppercase font-black">Poids d’admission (kg) *</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      required
-                      placeholder="Ex: 68"
-                      value={patWeight}
-                      onChange={(e) => setPatWeight(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-white/5 rounded-xl border border-white/5 text-[12px] text-white"
-                    />
-                  </div>
-                  <div className="space-y-1 col-span-1 sm:col-span-2">
-                    <label className="text-[10px] text-gray-400 uppercase font-black">Tension artérielle d’admission</label>
-                    <input
-                      type="text"
-                      placeholder="Ex: 120/80"
-                      value={patBP}
-                      onChange={(e) => setPatBP(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-white/5 rounded-xl border border-white/5 text-[12px] text-white"
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-end gap-2 pt-2 border-t border-white/5">
-                  <button
-                    type="button"
-                    onClick={() => setShowAddPatient(false)}
-                    className="px-4 py-2 bg-white/5 hover:bg-white/10 text-gray-400 font-bold rounded-xl text-[10px] uppercase"
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={savingPatient}
-                    className="px-4 py-2 bg-brand-primary hover:bg-brand-primary/90 text-gray-900 font-bold rounded-xl text-[10px] uppercase"
-                  >
-                    {savingPatient ? "Enregistrement..." : "Confirmer l'Admission"}
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* Patients Status Filter pills */}
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center justify-end">
               <button
                 type="button"
-                onClick={() => setStatusFilter("all")}
-                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-white/5 ${statusFilter === "all" ? "bg-white/15 text-white" : "text-gray-400 hover:text-white"}`}
+                onClick={() => setShowAddPatient(!showAddPatient)}
+                className="px-4 py-3 bg-brand-primary text-gray-900 rounded-2xl font-black text-[11px] uppercase tracking-wider flex items-center gap-2 active:scale-95 transition-transform"
               >
-                Toutes ({patients.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatusFilter("stable")}
-                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-green-500/10 ${statusFilter === "stable" ? "bg-green-500/10 text-green-400" : "text-gray-400 hover:text-white"}`}
-              >
-                Stable ({stableCount})
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatusFilter("warning")}
-                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-yellow-500/10 ${statusFilter === "warning" ? "bg-yellow-400/10 text-yellow-500" : "text-gray-400 hover:text-white"}`}
-              >
-                Alerte DPA ({warningCount})
-              </button>
-              <button
-                type="button"
-                onClick={() => setStatusFilter("critical")}
-                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-red-500/10 ${statusFilter === "critical" ? "bg-red-500/10 text-red-400" : "text-gray-400 hover:text-white"}`}
-              >
-                Vigilance ({criticalCount})
+                <Plus size={16} />
+                Nouvelle Patiente
               </button>
             </div>
-
-            {/* Patients Cards List */}
-            {filteredPatients.length === 0 ? (
-              <div className="bg-white/5 p-16 rounded-[2.5rem] border border-dashed border-white/5 text-center text-gray-400">
-                <Baby size={32} className="mx-auto mb-2 opacity-55" />
-                <p className="text-xs font-black uppercase tracking-widest italic">Aucune patiente ne correspond à la recherche.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {filteredPatients.map((p) => {
-                  const isPtHigh = p.bloodPressure && (parseFloat(p.bloodPressure.split("/")[0]) >= 140);
-                  const isPtOverdue = p.weeksPregnant > 40;
-                  const profileStatus = isPtHigh ? "critical" : isPtOverdue ? "warning" : "stable";
-
-                  return (
-                    <div
-                      key={p.id}
-                      onClick={() => setSelectedPatient(p)}
-                      className={`p-6 rounded-[2.5rem] border transition-all cursor-pointer text-left ${selectedPatient?.id === p.id ? "bg-white/10 border-brand-primary shadow-2xl scale-[1.01]" : "bg-white/5 border-white/5 hover:bg-white/10"}`}
-                    >
-                      <div className="flex justify-between items-start mb-4">
-                        <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-brand-primary">
-                          <User size={20} />
-                        </div>
-                        <span
-                          className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-wider ${profileStatus === "critical" ? "bg-red-500/15 text-red-400" : profileStatus === "warning" ? "bg-yellow-400/15 text-yellow-500" : "bg-green-500/15 text-green-400"}`}
-                        >
-                          {profileStatus === "critical" ? "Vigilance" : profileStatus === "warning" ? "Alerte DPA" : "Stable"}
-                        </span>
-                      </div>
-                      <h4 className="text-base font-black text-white truncate leading-none mb-1 uppercase tracking-tight">{p.name}</h4>
-                      <p className="text-[10px] text-brand-primary font-bold uppercase tracking-widest">{p.phone}</p>
-
-                      <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-white/5 text-[11px]">
-                        <div>
-                          <p className="text-[8px] text-gray-400 uppercase font-black">Grossesse</p>
-                          <p className="font-bold text-white">{p.weeksPregnant} SA</p>
-                        </div>
-                        <div>
-                          <p className="text-[8px] text-gray-400 uppercase font-black">Dernières données</p>
-                          <p className="font-bold text-white mb-0.5">{p.bloodPressure || "—"} | {p.weight}kg</p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </div>
 
-          {/* Patient Details Dossier panel on the right */}
-          {selectedPatient && (
-            <div className="lg:col-span-6 bg-white/5 p-6 md:p-8 rounded-[3rem] border border-white/15 space-y-6 shadow-2xl relative">
-              <button
-                type="button"
-                onClick={() => setSelectedPatient(null)}
-                className="absolute top-6 right-6 p-2 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-gray-400 hover:text-white cursor-pointer"
-              >
-                <X size={18} />
-              </button>
-
-              <div className="text-left">
-                <p className="text-[10px] font-black text-brand-primary uppercase tracking-[0.3em] mb-1">
-                  DOSSIER CLINIQUE PATIENTE
-                </p>
-                <h3 className="text-2xl font-display font-black text-white tracking-tight uppercase leading-none break-words max-w-[80%]">
-                  {selectedPatient.name}
-                </h3>
-                <p className="text-[11px] text-gray-400 font-bold uppercase mt-1">Identifiant : {selectedPatient.id}</p>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 bg-white/5 p-4 rounded-2xl border border-white/5 text-center">
-                <div>
-                  <p className="text-[8px] text-gray-400 uppercase font-black">Stade</p>
-                  <p className="text-base font-black text-white">{selectedPatient.weeksPregnant} SA</p>
-                </div>
-                <div>
-                  <p className="text-[8px] text-gray-400 uppercase font-black">Poids Actuel</p>
-                  <p className="text-base font-black text-white">{selectedPatient.weight} kg</p>
-                </div>
-                <div>
-                  <p className="text-[8px] text-gray-400 uppercase font-black">Tension</p>
-                  <p className="text-base font-black text-white">{selectedPatient.bloodPressure || "—"}</p>
-                </div>
-              </div>
-
-              {/* Charts Evolution Curve */}
-              <div className="pt-2">
-                <ClinicalCharts logs={selectedPatientLogs} language={language} initialWeight={selectedPatient.weight || 65} />
-              </div>
-
-              {/* Actions tabs inside selected patient */}
-              <div className="border-b border-white/5 flex gap-4 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setActiveDetailsTab("bilan")}
-                  className={`text-xs font-black uppercase tracking-widest pb-2 transition-colors ${activeDetailsTab === "bilan" ? "text-brand-primary border-b-2 border-brand-primary cursor-pointer" : "text-gray-500 hover:text-gray-300 cursor-pointer"}`}
-                >
-                  Ajouter un Bilan Clinique
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveDetailsTab("prescription")}
-                  className={`text-xs font-black uppercase tracking-widest pb-2 transition-colors ${activeDetailsTab === "prescription" ? "text-brand-primary border-b-2 border-brand-primary cursor-pointer" : "text-gray-500 hover:text-gray-300 cursor-pointer"}`}
-                >
-                  Ajouter une Prescription
+          {/* Quick Registration Panel */}
+          {showAddPatient && (
+            <form onSubmit={handleRegisterPatient} className="bg-white/5 p-6 rounded-[2.5rem] border border-white/10 space-y-4">
+              <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                <h4 className="text-xs font-black uppercase text-brand-primary tracking-widest">Enregistrer une nouvelle Patiente (Admission clinique)</h4>
+                <button type="button" onClick={() => setShowAddPatient(false)} className="text-gray-400 hover:text-white">
+                  <X size={18} />
                 </button>
               </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] text-gray-400 uppercase font-black">Nom de la future maman *</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Zawadi Bamba"
+                    required
+                    value={patName}
+                    onChange={(e) => setPatName(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-white/5 rounded-xl border border-white/5 text-[12px] text-white"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-gray-400 uppercase font-black">Téléphone de contact *</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: +243..."
+                    required
+                    value={patPhone}
+                    onChange={(e) => setPatPhone(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-white/5 rounded-xl border border-white/5 text-[12px] text-white"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-gray-400 uppercase font-black">Date de dernières règles *</label>
+                  <input
+                    type="date"
+                    required
+                    value={patLMP}
+                    onChange={(e) => setPatLMP(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-white/5 rounded-xl border border-white/5 text-[12px] text-white"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-gray-400 uppercase font-black">Poids d’admission (kg) *</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    required
+                    placeholder="Ex: 68"
+                    value={patWeight}
+                    onChange={(e) => setPatWeight(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-white/5 rounded-xl border border-white/5 text-[12px] text-white"
+                  />
+                </div>
+                <div className="space-y-1 col-span-1 sm:col-span-2">
+                  <label className="text-[10px] text-gray-400 uppercase font-black">Tension artérielle d’admission</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: 120/80"
+                    value={patBP}
+                    onChange={(e) => setPatBP(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-white/5 rounded-xl border border-white/5 text-[12px] text-white"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setShowAddPatient(false)}
+                  className="px-4 py-2 bg-white/5 hover:bg-white/10 text-gray-400 font-bold rounded-xl text-[10px] uppercase"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingPatient}
+                  className="px-4 py-2 bg-brand-primary hover:bg-brand-primary/90 text-gray-900 font-bold rounded-xl text-[10px] uppercase"
+                >
+                  {savingPatient ? "Enregistrement..." : "Confirmer l'Admission"}
+                </button>
+              </div>
+            </form>
+          )}
 
-              {activeDetailsTab === "bilan" ? (
-                <form onSubmit={handleAddClinicalLog} className="space-y-4 text-left">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label className="text-[10px] text-gray-400 uppercase font-black">Donnée du Poids (kg)</label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        placeholder="Ex: 71"
-                        value={newWeight}
-                        onChange={(e) => setNewWeight(e.target.value)}
-                        className="w-full px-4 py-2 bg-white/5 rounded-xl border border-white/5 text-[12px] text-white"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] text-gray-400 uppercase font-black">Tension artérielle</label>
-                      <input
-                        type="text"
-                        placeholder="Ex: 120/80"
-                        value={newBP}
-                        onChange={(e) => setNewBP(e.target.value)}
-                        className="w-full px-4 py-2 bg-white/5 rounded-xl border border-white/5 text-[12px] text-white"
-                      />
-                    </div>
-                    <div className="col-span-1 sm:col-span-2 space-y-1">
-                      <label className="text-[10px] text-gray-400 uppercase font-black">Statut de sécurité</label>
-                      <select
-                        value={newStatus}
-                        onChange={(e) => setNewStatus(e.target.value as HealthStatus)}
-                        className="w-full px-4 py-2 bg-gray-800 rounded-xl border border-white/5 text-[12px] text-white"
-                      >
-                        <option value="stable" className="bg-gray-800">Stable (Couloir vert)</option>
-                        <option value="warning" className="bg-gray-800">Vigilance clinique (Surveillance rapprochée)</option>
-                        <option value="critical" className="bg-gray-800">Critique / Action Immédiate</option>
-                      </select>
-                    </div>
-                  </div>
+          {/* Patients Status Filter pills */}
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setStatusFilter("all")}
+              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-white/5 ${statusFilter === "all" ? "bg-white/15 text-white" : "text-gray-400 hover:text-white"}`}
+            >
+              Toutes ({patients.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter("stable")}
+              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-green-500/10 ${statusFilter === "stable" ? "bg-green-500/10 text-green-400" : "text-gray-400 hover:text-white"}`}
+            >
+              Stable ({stableCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter("warning")}
+              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-yellow-500/10 ${statusFilter === "warning" ? "bg-yellow-400/10 text-yellow-500" : "text-gray-400 hover:text-white"}`}
+            >
+              Alerte DPA ({warningCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter("critical")}
+              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border border-red-500/10 ${statusFilter === "critical" ? "bg-red-500/10 text-red-400" : "text-gray-400 hover:text-white"}`}
+            >
+              Vigilance ({criticalCount})
+            </button>
+          </div>
 
-                  {/* Symptoms checks list */}
-                  <div className="space-y-1.5 pt-2">
-                    <label className="text-[10px] text-gray-400 uppercase font-black block">Symptômes déclarés ou diagnostiqués</label>
-                    <div className="flex flex-wrap gap-2 animate-none">
-                      {symptomsOptions.map((opt) => (
-                        <button
-                          type="button"
-                          key={opt}
-                          onClick={() => toggleSymptom(opt)}
-                          className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase transition-all cursor-pointer ${newSymptoms.includes(opt) ? "bg-red-500 text-white font-black" : "bg-white/5 text-gray-400 hover:text-white"}`}
-                        >
-                          {opt}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+          {/* Patients Cards List as Accordion */}
+          {filteredPatients.length === 0 ? (
+            <div className="bg-white/5 p-16 rounded-[2.5rem] border border-dashed border-white/5 text-center text-gray-400">
+              <Baby size={32} className="mx-auto mb-2 opacity-55" />
+              <p className="text-xs font-black uppercase tracking-widest italic">Aucune patiente ne correspond à la recherche.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {filteredPatients.map((p) => {
+                const isPtHigh = p.bloodPressure && (parseFloat(p.bloodPressure.split("/")[0]) >= 140);
+                const isPtOverdue = p.weeksPregnant > 40;
+                const profileStatus = isPtHigh ? "critical" : isPtOverdue ? "warning" : "stable";
+                const isSelected = selectedPatient?.id === p.id;
 
-                  <div className="space-y-1">
-                    <label className="text-[10px] text-gray-400 uppercase font-black">Directives et observations de l'auscultation</label>
-                    <textarea
-                      rows={3}
-                      placeholder="Commentaires généraux sur l'état général de la grossesse, battement fœtal, etc."
-                      value={newNotes}
-                      onChange={(e) => setNewNotes(e.target.value)}
-                      className="w-full px-4 py-2 bg-white/5 rounded-xl border border-white/5 text-[12px] text-white"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={savingLog}
-                    className="w-full bg-brand-primary hover:bg-brand-primary/95 text-gray-900 font-extrabold py-3.5 rounded-xl text-center text-[11px] uppercase tracking-wider cursor-pointer"
+                return (
+                  <div
+                    key={p.id}
+                    className={`group rounded-[2.5rem] border transition-all duration-300 overflow-hidden ${isSelected ? "bg-white/5 border-white/10 ring-1 ring-white/5 shadow-2xl" : "bg-white/5 border-white/5 hover:bg-white/10"}`}
                   >
-                    {savingLog ? "Sauvegarde clinique..." : "Valider le bilan et mettre à jour"}
-                  </button>
-                </form>
-              ) : (
-                <form onSubmit={handleSavePrescription} className="space-y-4 text-left">
-                  <div className="space-y-1">
-                    <label className="text-[10px] text-gray-400 uppercase font-black">Ordonnance & Prescriptions cliniques</label>
-                    <textarea
-                      rows={5}
-                      required
-                      placeholder="Consignes médicamenteuses, examens à faire, recommandations de repos, supplémentation en Fer..."
-                      value={newPrescriptionText}
-                      onChange={(e) => setNewPrescriptionText(e.target.value)}
-                      className="w-full px-4 py-2 bg-white/5 rounded-xl border border-white/5 text-[12px] text-white"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={savingPrescription}
-                    className="w-full bg-brand-primary hover:bg-brand-primary/95 text-gray-900 font-extrabold py-3.5 rounded-xl text-center text-[11px] uppercase tracking-wider cursor-pointer"
-                  >
-                    {savingPrescription ? "Transmission en cours..." : "Transmettre l'ordonnance à la maman"}
-                  </button>
-                </form>
-              )}
-
-              {/* History checkout logs */}
-              <div className="pt-4 border-t border-white/5 space-y-4 text-left">
-                <h4 className="text-xs font-black uppercase text-brand-primary tracking-widest flex items-center gap-1.5">
-                  <History size={16} />
-                  Historique Clinique des Bilans ({selectedPatientLogs.length})
-                </h4>
-
-                {selectedPatientLogs.length === 0 ? (
-                  <p className="text-xs text-gray-400 italic">Aucune observation clinique encore entrée.</p>
-                ) : (
-                  <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
-                    {selectedPatientLogs.map((lg) => (
-                      <div key={lg.id} className="bg-white/5 p-4 rounded-2xl border border-white/5 space-y-2 text-left">
-                        <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-wider">
-                          <span className="text-brand-primary">Le {new Date(lg.date).toLocaleDateString()}</span>
-                          <span className={`${lg.status === "critical" ? "text-red-400" : lg.status === "warning" ? "text-yellow-400" : "text-green-400"}`}>
-                            {lg.status.toUpperCase()}
-                          </span>
-                        </div>
-                        {lg.weight && <p className="text-[11px] text-gray-300">Poids: <span className="font-bold text-white">{lg.weight} kg</span> • Tension: <span className="font-bold text-white">{lg.bloodPressure || "—"}</span></p>}
-                        
-                        {lg.symptoms && lg.symptoms.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            {lg.symptoms.map((sy) => (
-                              <span key={sy} className="bg-red-500/10 border border-red-500/20 text-red-300 px-2.5 py-0.5 rounded-[0.5rem] text-[8px] font-bold uppercase">{sy}</span>
-                            ))}
+                    {/* Card Header (Shrunk context) */}
+                    <div 
+                      onClick={() => setSelectedPatient(isSelected ? null : p)}
+                      className={`p-6 flex items-center gap-4 cursor-pointer transition-colors ${isSelected ? "bg-white/5" : ""}`}
+                    >
+                       <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-[1.2rem] shrink-0 shadow-inner ${isSelected ? "bg-brand-primary text-gray-950" : "bg-white/10 text-brand-primary"}`}>
+                          {p.name.charAt(0).toUpperCase()}
+                       </div>
+                       <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-3">
+                             <h4 className="text-lg font-black text-white truncate leading-none uppercase tracking-tight">{p.name}</h4>
+                             <span className={`px-2.5 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest ${profileStatus === "critical" ? "bg-red-500 text-white animate-pulse" : profileStatus === "warning" ? "bg-yellow-400 text-gray-950" : "bg-green-500 text-white"}`}>
+                               {profileStatus === "critical" ? "Vigilance" : profileStatus === "warning" ? "Alerte DPA" : "Stable"}
+                             </span>
                           </div>
-                        )}
+                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em] mt-1 font-mono">{p.phone} • {p.weeksPregnant} SA</p>
+                       </div>
+                       <div className="flex items-center gap-2">
+                          <button
+                             onClick={(e) => {
+                               e.stopPropagation();
+                               handleDeletePatient(p.id);
+                             }}
+                             className="p-2.5 bg-red-500/10 text-red-500 rounded-xl opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500/20"
+                             title="Supprimer la patiente"
+                          >
+                             <Trash2 size={14} />
+                          </button>
+                          <div className={`transition-transform duration-300 ${isSelected ? "rotate-180 text-brand-primary" : "text-gray-500"}`}>
+                             <ChevronDown size={24} />
+                          </div>
+                       </div>
+                    </div>
 
-                        {lg.notes && <p className="text-xs text-gray-400 leading-relaxed italic">"{lg.notes}"</p>}
-                      </div>
-                    ))}
+                    {/* Expansion Area (Inline Dossier) */}
+                    {isSelected && (
+                       <motion.div 
+                         initial={{ height: 0, opacity: 0 }}
+                         animate={{ height: "auto", opacity: 1 }}
+                         className="border-t border-white/5 bg-gray-950/30 overflow-hidden"
+                       >
+                          <div className="p-6 md:p-8 space-y-8">
+                              <div className="text-left border-b border-white/5 pb-4 flex justify-between items-end">
+                                <div>
+                                  <p className="text-[9px] font-black text-brand-primary uppercase tracking-[0.3em] mb-1">
+                                    DOSSIER CLINIQUE PATIENTE
+                                  </p>
+                                  <h3 className="text-2xl font-display font-black text-white tracking-tight uppercase leading-none">
+                                    {p.name}
+                                  </h3>
+                                </div>
+                                <div className="flex gap-2">
+                                   <button
+                                     onClick={() => {
+                                        setIsEditingPatient(!isEditingPatient);
+                                        if (!isEditingPatient) handleStartEditPatient(p);
+                                     }}
+                                     className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${isEditingPatient ? "bg-brand-primary text-gray-950 border-brand-primary" : "bg-white/5 border-white/10 text-white hover:bg-white/10"}`}
+                                   >
+                                     {isEditingPatient ? "Annuler" : "Modifier"}
+                                   </button>
+                                   <div className="bg-white/5 px-4 py-2 rounded-xl border border-white/5">
+                                      <p className="text-[8px] text-gray-500 uppercase font-mono">ID: {p.id.toUpperCase()}</p>
+                                   </div>
+                                </div>
+                              </div>
+
+                              {isEditingPatient && selectedPatient ? (
+                                 <div className="bg-white/5 p-6 rounded-[2.5rem] border border-brand-primary/30">
+                                    <h5 className="text-[10px] font-black uppercase text-brand-primary mb-4 tracking-widest text-left">Modifier les informations de base</h5>
+                                    <form onSubmit={handleUpdatePatient} className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                                       <div className="space-y-1">
+                                          <label className="text-[9px] font-black text-gray-400 uppercase">Nom complet</label>
+                                          <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full bg-gray-950 border border-white/5 rounded-xl px-4 py-2 text-xs text-white" />
+                                       </div>
+                                       <div className="space-y-1">
+                                          <label className="text-[9px] font-black text-gray-400 uppercase">Téléphone</label>
+                                          <input type="text" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className="w-full bg-gray-950 border border-white/5 rounded-xl px-4 py-2 text-xs text-white" />
+                                       </div>
+                                       <div className="space-y-1">
+                                          <label className="text-[9px] font-black text-gray-400 uppercase">SA Actuelles</label>
+                                          <input type="number" value={editWeeks} onChange={(e) => setEditWeeks(Number(e.target.value))} className="w-full bg-gray-950 border border-white/5 rounded-xl px-4 py-2 text-xs text-white" />
+                                       </div>
+                                       <div className="pt-5 md:pt-0 flex items-end">
+                                          <button type="submit" disabled={updatingPatient} className="w-full py-2 bg-brand-primary text-gray-950 rounded-xl text-[10px] font-black uppercase tracking-widest hover:brightness-110">
+                                            {updatingPatient ? "Mise à jour..." : "Sauvegarder"}
+                                          </button>
+                                       </div>
+                                    </form>
+                                 </div>
+                              ) : (
+                                 <>
+                                    <div className="grid grid-cols-3 gap-2 bg-white/5 p-4 rounded-2xl border border-white/5 text-center">
+                                      <div>
+                                        <p className="text-[8px] text-gray-400 uppercase font-black tracking-widest">Stade</p>
+                                        <p className="text-base font-black text-white">{p.weeksPregnant} SA</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[8px] text-gray-400 uppercase font-black tracking-widest">Poids</p>
+                                        <p className="text-base font-black text-white">{p.weight} kg</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-[8px] text-gray-400 uppercase font-black tracking-widest">BP</p>
+                                        <p className="text-base font-black text-white">{p.bloodPressure || "—"}</p>
+                                      </div>
+                                    </div>
+
+                                    <div>
+                                      <ClinicalCharts logs={selectedPatientLogs} language={language} initialWeight={p.weight || 65} />
+                                    </div>
+                                 </>
+                              )}
+
+                              <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/10 space-y-6">
+                                <div className="border-b border-white/5 flex gap-4">
+                                  <button
+                                    onClick={() => setActiveDetailsTab("bilan")}
+                                    className={`text-[10px] pb-3 font-black uppercase tracking-widest transition-all ${activeDetailsTab === "bilan" ? "text-brand-primary border-b-2 border-brand-primary" : "text-gray-500 hover:text-white"}`}
+                                  >
+                                    Nouveau Bilan
+                                  </button>
+                                  <button
+                                    onClick={() => setActiveDetailsTab("prescription")}
+                                    className={`text-[10px] pb-3 font-black uppercase tracking-widest transition-all ${activeDetailsTab === "prescription" ? "text-brand-primary border-b-2 border-brand-primary" : "text-gray-500 hover:text-white"}`}
+                                  >
+                                    Ordonnance
+                                  </button>
+                                  <button
+                                    onClick={() => setActiveDetailsTab("historique")}
+                                    className={`text-[10px] pb-3 font-black uppercase tracking-widest transition-all ${activeDetailsTab === "historique" ? "text-brand-primary border-b-2 border-brand-primary" : "text-gray-500 hover:text-white"}`}
+                                  >
+                                    Historique Cli.
+                                  </button>
+                                </div>
+
+                                {activeDetailsTab === "bilan" ? (
+                                  <form onSubmit={handleAddClinicalLog} className="space-y-4 text-left">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                      <div className="space-y-1">
+                                        <label className="text-[9px] text-gray-400 uppercase font-black">Poids (kg)</label>
+                                        <input type="number" step="0.1" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} className="w-full bg-gray-950 border border-white/5 rounded-xl px-4 py-2.5 text-xs text-white focus:border-brand-primary outline-none" />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <label className="text-[9px] text-gray-400 uppercase font-black">BP</label>
+                                        <input type="text" value={newBP} onChange={(e) => setNewBP(e.target.value)} className="w-full bg-gray-950 border border-white/5 rounded-xl px-4 py-2.5 text-xs text-white font-mono focus:border-brand-primary outline-none" />
+                                      </div>
+                                    </div>
+                                    <div>
+                                       <label className="text-[9px] text-gray-400 uppercase font-black block mb-2">Symptômes</label>
+                                       <div className="flex flex-wrap gap-1.5">
+                                          {symptomsOptions.map(opt => (
+                                              <button type="button" key={opt} onClick={() => toggleSymptom(opt)} className={`px-2.5 py-1.5 rounded-lg text-[8px] font-black uppercase transition-all ${newSymptoms.includes(opt) ? "bg-red-500 text-white" : "bg-white/5 text-gray-500 hover:bg-white/10"}`}>{opt}</button>
+                                          ))}
+                                       </div>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-[9px] text-gray-400 uppercase font-black">Notes</label>
+                                      <textarea rows={3} value={newNotes} onChange={(e) => setNewNotes(e.target.value)} className="w-full bg-gray-950 border border-white/5 rounded-xl px-4 py-3 text-xs text-white focus:border-brand-primary outline-none" />
+                                    </div>
+                                    <button type="submit" disabled={savingLog} className="w-full py-3.5 bg-brand-primary text-gray-950 rounded-xl text-[10px] font-black uppercase tracking-widest hover:brightness-110 disabled:opacity-50">
+                                      Enregistrer
+                                    </button>
+                                  </form>
+                                ) : activeDetailsTab === "prescription" ? (
+                                  <form onSubmit={handleSavePrescription} className="space-y-4 text-left">
+                                    <div className="space-y-1">
+                                      <label className="text-[9px] text-gray-400 uppercase font-black">Ordonnance</label>
+                                      <textarea rows={6} value={newPrescriptionText} onChange={(e) => setNewPrescriptionText(e.target.value)} className="w-full bg-gray-950 border border-white/5 rounded-xl px-4 py-3 text-xs text-white focus:border-brand-primary outline-none" />
+                                    </div>
+                                    <button type="submit" disabled={savingLog} className="w-full py-3.5 bg-brand-primary text-gray-950 rounded-xl text-[10px] font-black uppercase tracking-widest hover:brightness-110 disabled:opacity-50">
+                                      Valider Prescription
+                                    </button>
+                                  </form>
+                                ) : (
+                                   <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
+                                      {selectedPatientLogs.length === 0 ? (
+                                         <p className="text-[10px] text-gray-500 italic py-6">Aucun historique disponible.</p>
+                                      ) : (
+                                         selectedPatientLogs.map(log => (
+                                            <div key={log.id} className="bg-gray-950 p-4 rounded-xl border border-white/5 relative group text-left">
+                                               <button onClick={() => handleDeleteLog(log.id)} className="absolute top-2 right-2 p-1.5 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={12} /></button>
+                                               <div className="flex justify-between items-start mb-2">
+                                                  <p className="text-[9px] font-mono text-gray-500">{new Date(log.date).toLocaleDateString()}</p>
+                                                  <span className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase ${log.status === 'critical' ? 'bg-red-500 text-white' : log.status === 'warning' ? 'bg-yellow-400 text-gray-950' : 'bg-green-500 text-white'}`}>{log.status}</span>
+                                               </div>
+                                               <div className="grid grid-cols-2 gap-2 text-[10px] mb-2 border-b border-white/5 pb-2">
+                                                  <p><span className="text-gray-500 uppercase font-black text-[7px]">Poids:</span> <span className="text-white font-bold">{log.weight}kg</span></p>
+                                                  <p><span className="text-gray-500 uppercase font-black text-[7px]">BP:</span> <span className="text-white font-bold">{log.bloodPressure}</span></p>
+                                               </div>
+                                               <p className="text-[10px] text-gray-300 leading-relaxed italic">{log.notes}</p>
+                                            </div>
+                                         ))
+                                      )}
+                                   </div>
+                                )}
+                              </div>
+                          </div>
+                       </motion.div>
+                      )}
                   </div>
-                )}
-              </div>
+                );
+              })}
             </div>
           )}
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 function AdminView({
@@ -4288,7 +4278,7 @@ function AdminView({
         const list: Patient[] = [];
         snap.forEach((docSnap) => {
           const data = docSnap.data();
-          if (!data.isAdmin && data.id !== "admin-bypass") {
+          if (!data.isAdmin && data.role !== "hospital" && data.id !== "admin-bypass") {
             list.push({ ...data, id: docSnap.id } as Patient);
           }
         });
@@ -4740,14 +4730,14 @@ function AdminView({
                       <div className="flex gap-2">
                         <button
                           onClick={() => handleStartEditStaff(s)}
-                          className="p-2 text-brand-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="p-2 text-brand-primary hover:bg-white/5 rounded-lg transition-colors"
                           title="Modifier"
                         >
                           <Edit2 size={12} />
                         </button>
                         <button
                           onClick={() => handleDeleteStaff(s.id)}
-                          className="p-2 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="p-2 text-red-500 hover:bg-white/5 rounded-lg transition-colors"
                           title="Supprimer"
                         >
                           <Trash2 size={12} />
@@ -4804,24 +4794,22 @@ function AdminView({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* Left Column: List of Patients */}
-            <div className={`${selectedPatient ? "lg:col-span-4" : "lg:col-span-12"} space-y-6 transition-all duration-300`}>
+          <div className="flex flex-col gap-6">
+            {/* Search & Filters Section */}
+            <div className="space-y-4">
               <div className="flex flex-col gap-3">
                 <h3 className="text-xs font-black uppercase tracking-widest text-brand-primary">
                   Recherche & Filtres
                 </h3>
-                {/* Search Input */}
                 <div className="relative">
                   <input
                     type="text"
                     placeholder="Rechercher par nom ou téléphone..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 px-5 py-3.5 rounded-2xl text-xs font-medium placeholder-gray-500 text-white focus:outline-none focus:border-brand-primary transition-all shadow-inner"
+                    className="w-full bg-white/5 border border-white/10 px-5 py-3.5 rounded-2xl text-[12px] font-medium placeholder-gray-500 text-white focus:outline-none focus:border-brand-primary transition-all shadow-inner"
                   />
                 </div>
-                {/* Filter Buttons */}
                 <div className="flex flex-wrap gap-1">
                   <button
                     onClick={() => setStatusFilter("all")}
@@ -4833,492 +4821,225 @@ function AdminView({
                     onClick={() => setStatusFilter("critical")}
                     className={`px-4 py-2 text-[9px] font-black uppercase tracking-widest rounded-xl border transition-all ${statusFilter === "critical" ? "bg-red-500 text-white border-red-500 shadow-md shadow-red-500/20" : "bg-red-500/5 hover:bg-red-500/10 border-red-500/10 text-red-400"}`}
                   >
-                    Urgences (
-                    {patients.filter((p) => getPatientStatus(p) === "critical").length}
-                    )
+                    Urgences ({patients.filter((p) => getPatientStatus(p) === "critical").length})
                   </button>
                   <button
                     onClick={() => setStatusFilter("warning")}
                     className={`px-4 py-2 text-[9px] font-black uppercase tracking-widest rounded-xl border transition-all ${statusFilter === "warning" ? "bg-amber-500 text-gray-950 border-amber-500" : "bg-amber-500/5 hover:bg-amber-500/10 border-amber-500/10 text-amber-400"}`}
                   >
-                    Vigilance (
-                    {patients.filter((p) => getPatientStatus(p) === "warning").length}
-                    )
+                    Vigilance ({patients.filter((p) => getPatientStatus(p) === "warning").length})
                   </button>
                   <button
                     onClick={() => setStatusFilter("stable")}
                     className={`px-4 py-2 text-[9px] font-black uppercase tracking-widest rounded-xl border transition-all ${statusFilter === "stable" ? "bg-green-500 text-white border-green-500" : "bg-green-500/5 hover:bg-green-500/10 border-green-500/10 text-green-400"}`}
                   >
-                    Stables (
-                    {patients.filter((p) => getPatientStatus(p) === "stable").length}
-                    )
+                    Stables ({patients.filter((p) => getPatientStatus(p) === "stable").length})
                   </button>
                 </div>
               </div>
+            </div>
 
-              <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                {loadingPatients ? (
-                  <div className="p-12 text-center text-gray-400 solutions-loader italic font-bold">
-                    <Loader2 className="animate-spin text-brand-primary mx-auto mb-3" size={32} />
-                    Chargement de la file d'attente...
-                  </div>
-                ) : filteredPatients.length === 0 ? (
-                  <div className="bg-white/5 p-12 rounded-[2rem] border border-dashed border-white/10 text-center animate-pulse">
-                    <p className="text-xs text-gray-400 italic">
-                      Aucune patiente ne correspond aux critères.
-                    </p>
-                  </div>
-                ) : (
-                  filteredPatients.map((p) => {
+            {/* List of Patients - Redesigned as an Accordion List */}
+            <div className="space-y-4">
+              {loadingPatients ? (
+                <div className="p-12 text-center text-gray-400 italic font-bold">
+                  <Loader2 className="animate-spin text-brand-primary mx-auto mb-3" size={32} />
+                  Chargement de la file d'attente...
+                </div>
+              ) : filteredPatients.length === 0 ? (
+                <div className="bg-white/5 p-12 rounded-[2rem] border border-dashed border-white/10 text-center animate-pulse">
+                  <p className="text-xs text-gray-400 italic">Aucune patiente trouvée.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-4">
+                  {filteredPatients.map((p) => {
                     const patStatus = getPatientStatus(p);
                     const isSelected = selectedPatient?.id === p.id;
+                    
                     return (
-                      <button
-                        key={p.id}
-                        onClick={() => {
-                          setSelectedPatient(p);
-                          setIsEditingPatient(false);
-                        }}
-                        className={`w-full text-left p-5 rounded-[2rem] border transition-all flex items-center gap-4 ${isSelected ? "bg-brand-primary border-brand-primary text-gray-950 shadow-lg shadow-brand-primary/10" : "bg-white/5 hover:bg-white/10 border-white/5 text-white"}`}
+                      <div 
+                        key={p.id} 
+                        className={`group rounded-[2.5rem] border transition-all duration-300 overflow-hidden ${isSelected ? "bg-white/5 border-white/10 ring-1 ring-white/5" : "bg-white/5 hover:bg-white/10 border-white/5"}`}
                       >
-                        <div
-                          className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-md shadow-inner ${isSelected ? "bg-gray-950 text-white" : "bg-white/10 text-white"}`}
+                        {/* Header Area (Click to expand) */}
+                        <div 
+                          onClick={() => {
+                            if (isSelected) setSelectedPatient(null);
+                            else {
+                                setSelectedPatient(p);
+                                setIsEditingPatient(false);
+                            }
+                          }}
+                          className={`p-5 flex items-center gap-4 cursor-pointer transition-colors ${isSelected ? "bg-white/5" : ""}`}
                         >
-                          {p.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-black truncate leading-tight uppercase tracking-tight">
-                            {p.name}
-                          </p>
-                          <p
-                            className={`text-[10px] font-bold mt-1 ${isSelected ? "text-gray-900/60" : "text-gray-400"} uppercase font-mono`}
-                          >
-                            {p.phone} • SM {p.weeksPregnant}
-                          </p>
-                        </div>
-                        <span
-                          className={`w-3 h-3 rounded-full flex-shrink-0 border ${isSelected ? "border-gray-950" : "border-transparent"} ${patStatus === "critical" ? "bg-red-500 animate-pulse" : patStatus === "warning" ? "bg-yellow-400" : "bg-green-500"}`}
-                        />
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-            
-            {/* Right Column: Detail Workspace */}
-            {selectedPatient && (
-              <div className="lg:col-span-8 h-full">
-                <div className="bg-white/5 border border-white/5 rounded-[2.5rem] p-6 lg:p-8 space-y-8 relative overflow-hidden h-full">
-                  <div className="flex items-center justify-between gap-4 border-b border-white/5 pb-5">
-                    <div className="flex items-center gap-4">
-                      <div className="w-14 h-14 bg-brand-primary/20 rounded-[1.5rem] flex items-center justify-center text-brand-primary shadow-inner">
-                        <User size={28} />
-                      </div>
-                      <div>
-                        <h3 className="text-xl font-bold uppercase tracking-tight leading-none">
-                          {selectedPatient.name}
-                        </h3>
-                        <p className="text-[10px] text-brand-primary/80 font-bold mt-1.5 uppercase tracking-widest font-mono">
-                          ID: {selectedPatient.id.toUpperCase()}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                       {/* Buttons */}
-                       <button
-                        onClick={() => setShowQR(true)}
-                        className="p-3 bg-white/5 rounded-2xl hover:bg-white/10 border border-white/5 transition-colors text-white"
-                        title="Voir QR Code Fiche Santé"
-                      >
-                        <QrCode size={18} />
-                      </button>
-                      <button
-                        onClick={() => handleDeletePatient(selectedPatient.id)}
-                        className="p-3 bg-red-400/10 hover:bg-red-400/20 rounded-2xl border border-red-400/20 transition-colors text-red-400"
-                        title="Supprimer définitivement"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedPatient(null);
-                          setIsEditingPatient(false);
-                        }}
-                        className="p-3 bg-white/5 rounded-2xl hover:bg-white/10 border border-white/5 transition-colors text-white"
-                      >
-                        <X size={18} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-8 mt-8">
-                  {isEditingPatient ? (
-                    /* EDIT PATIENT PROFILE FORM */
-                    <form onSubmit={handleSavePatientProfile} className="space-y-6 bg-white/5 p-6 rounded-[2rem] border border-white/5 text-left font-sans">
-                      <h4 className="text-xs font-black uppercase text-brand-primary tracking-widest mb-4">
-                        Modifier les données de base de la patiente
-                      </h4>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                          <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">
-                            Nom Complet
-                          </label>
-                          <input
-                            type="text"
-                            value={editPatName}
-                            onChange={(e) => setEditPatName(e.target.value)}
-                            className="w-full bg-gray-950 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-brand-primary"
-                            required
-                          />
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">
-                            N° Téléphone
-                          </label>
-                          <input
-                            type="text"
-                            value={editPatPhone}
-                            onChange={(e) => setEditPatPhone(e.target.value)}
-                            className="w-full bg-gray-950 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-brand-primary font-mono"
-                            required
-                          />
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">
-                            Semaines de grossesse
-                          </label>
-                          <input
-                            type="number"
-                            value={editPatWeeks}
-                            onChange={(e) => setEditPatWeeks(Number(e.target.value))}
-                            className="w-full bg-gray-950 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-brand-primary"
-                            min={1}
-                            max={42}
-                            required
-                          />
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">
-                            Poids Baseline (kg)
-                          </label>
-                          <input
-                            type="number"
-                            value={editPatWeight}
-                            onChange={(e) => setEditPatWeight(Number(e.target.value))}
-                            className="w-full bg-gray-950 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-brand-primary"
-                            min={30}
-                            max={200}
-                            required
-                          />
-                        </div>
-
-                        <div className="col-span-2 space-y-1.5">
-                          <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">
-                            Hôpital / Centre de santé assigné
-                          </label>
-                          <select
-                            value={editPatHospital}
-                            onChange={(e) => setEditPatHospital(e.target.value)}
-                            className="w-full bg-gray-950 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-brand-primary"
-                          >
-                            <option value="">Sélectionnez un centre médical...</option>
-                            {hospitals.map((h) => (
-                              <option key={h.id} value={h.id}>
-                                {h.name} ({h.location})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className="flex gap-2 pt-2 justify-end">
-                        <button
-                          type="button"
-                          onClick={() => setIsEditingPatient(false)}
-                          className="px-5 py-2.5 rounded-xl text-[9px] font-black uppercase border border-white/10 hover:bg-white/5 transition-colors"
-                        >
-                          Annuler
-                        </button>
-                        <button
-                          type="submit"
-                          className="px-5 py-2.5 rounded-xl text-[9px] font-black uppercase bg-brand-primary text-gray-950 hover:bg-brand-primary/90 transition-colors shadow-lg shadow-brand-primary/10"
-                        >
-                          Enregistrer les modifications
-                        </button>
-                      </div>
-                    </form>
-                  ) : (
-                    <>
-                      {/* Patient Core Info Grid */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                          <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">
-                            Semaines
-                          </span>
-                          <p className="text-lg font-bold text-white mt-1">
-                            {selectedPatient.weeksPregnant}
-                          </p>
-                        </div>
-                        <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                          <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">
-                            Tension
-                          </span>
-                          <p className="text-lg font-bold text-white mt-1">
-                            {selectedPatient.bloodPressure || "—"}
-                          </p>
-                        </div>
-                        <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                          <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">
-                            Poids
-                          </span>
-                          <p className="text-lg font-bold text-white mt-1">
-                            {selectedPatient.weight} kg
-                          </p>
-                        </div>
-                        <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                          <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">
-                            Date DPA
-                          </span>
-                          <p className="text-xs font-bold text-white mt-2 font-mono uppercase">
-                            {selectedPatient.dueDate
-                              ? new Date(selectedPatient.dueDate).toLocaleDateString()
-                              : "—"}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Hospital Center Assignment */}
-                      {selectedHospital && (
-                        <div className="bg-white/5 p-5 rounded-[2rem] border border-white/5 text-left">
-                          <h5 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">
-                            Centre Médical Assigné
-                          </h5>
-                          <p className="text-sm font-black text-white uppercase tracking-tight">
-                            {selectedHospital.name}
-                          </p>
-                          <p className="text-[10px] text-brand-primary/70 mt-1 font-bold">
-                            Direct Line: {selectedHospital.phone} • Urgence: {selectedHospital.emergencyContact}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* RECORD NEW CLINICAL CHECKUP LOG */}
-                      <div className="bg-brand-primary/5 border border-brand-primary/10 rounded-[2rem] p-6 space-y-5">
-                        <div className="flex items-center gap-3 text-left">
-                          <div className="w-8 h-8 bg-brand-primary/20 rounded-xl flex items-center justify-center text-brand-primary">
-                            <Stethoscope size={16} />
+                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg shadow-inner shrink-0 ${isSelected ? "bg-brand-primary text-gray-950" : "bg-white/10 text-white"}`}>
+                            {p.name.charAt(0).toUpperCase()}
                           </div>
-                          <h4 className="text-xs font-black uppercase text-brand-primary tracking-widest">
-                            Nouveau bilan clinique (In-Person)
-                          </h4>
-                        </div>
-
-                        <form onSubmit={handleCreateCheckupLog} className="space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 font-sans focus:outline-none">
-                            {/* Weight */}
-                            <div className="space-y-1.5 text-left">
-                              <label className="text-[9px] font-black text-brand-primary uppercase tracking-widest">
-                                Poids (kg)
-                              </label>
-                              <input
-                                type="number"
-                                step="0.1"
-                                placeholder="Ex: 68.5"
-                                value={newWeight}
-                                onChange={(e) => setNewWeight(e.target.value)}
-                                className="w-full bg-gray-950 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-brand-primary"
-                              />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                                <h4 className="text-base font-black truncate leading-none uppercase tracking-tight text-white">{p.name}</h4>
+                                <span className={`w-2 h-2 rounded-full border ${patStatus === "critical" ? "bg-red-500 animate-pulse" : patStatus === "warning" ? "bg-amber-400" : "bg-green-500"}`} />
                             </div>
-                            {/* Blood Pressure */}
-                            <div className="space-y-1.5 text-left">
-                              <label className="text-[9px] font-black text-brand-primary uppercase tracking-widest">
-                                Pression Artérielle
-                              </label>
-                              <input
-                                type="text"
-                                placeholder="Ex: 120/80"
-                                value={newBP}
-                                onChange={(e) => setNewBP(e.target.value)}
-                                className="w-full bg-gray-950 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-brand-primary font-mono"
-                              />
-                            </div>
-                            {/* Status Select */}
-                            <div className="space-y-1.5 text-left">
-                              <label className="text-[9px] font-black text-brand-primary uppercase tracking-widest">
-                                Statut Clinique
-                              </label>
-                              <select
-                                value={newStatus}
-                                onChange={(e) =>
-                                  setNewStatus(e.target.value as HealthStatus)
-                                }
-                                className="w-full bg-gray-950 border border-white/10 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-brand-primary"
-                              >
-                                <option value="stable">Stable (Normal)</option>
-                                <option value="warning">Vigilance (Alerte)</option>
-                                <option value="critical">Critique (Urgence)</option>
-                              </select>
-                            </div>
-                          </div>
-
-                          {/* Multiselect Symptoms */}
-                          <div className="space-y-2 text-left">
-                            <span className="text-[9px] font-black text-brand-primary uppercase tracking-widest">
-                              Signes de Danger identifiés
-                            </span>
-                            <div className="flex flex-wrap gap-1.5">
-                              {commonSymptoms.map((symp) => {
-                                const active = newSymptoms.includes(symp);
-                                return (
-                                  <button
-                                    type="button"
-                                    key={symp}
-                                    onClick={() => toggleSymptom(symp)}
-                                    className={`px-3 py-1.5 rounded-lg text-[9px] font-bold border transition-colors ${active ? "bg-brand-primary text-gray-950 border-brand-primary font-black uppercase" : "bg-white/5 text-gray-400 border-white/5 hover:bg-white/10"}`}
-                                  >
-                                    {symp}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-
-                          {/* Observation Notes */}
-                          <div className="space-y-1.5 text-left">
-                            <label className="text-[9px] font-black text-brand-primary uppercase tracking-widest">
-                              Notes cliniques & prescriptions
-                            </label>
-                            <textarea
-                              rows={2}
-                              placeholder="Indiquez ici les recommandations ou ordonnances données à la maman..."
-                              value={newNotes}
-                              onChange={(e) => setNewNotes(e.target.value)}
-                              className="w-full bg-gray-950 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-brand-primary"
-                            />
-                          </div>
-
-                          {/* Submit Button */}
-                          <button
-                            type="submit"
-                            disabled={submittingLog}
-                            className="w-full bg-brand-primary text-gray-950 hover:bg-brand-primary/95 transition-all py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
-                          >
-                            {submittingLog ? (
-                              <Loader2 className="animate-spin" size={12} />
-                            ) : null}
-                            Enregistrer l'Observation
-                          </button>
-                        </form>
-                      </div>
-
-                      {/* TIMELINE OF OBSERVATIONS */}
-                      <div className="space-y-4">
-                        <div className="flex items-center gap-3 text-left">
-                          <div className="w-8 h-8 bg-white/10 rounded-xl flex items-center justify-center text-white">
-                            <History size={16} />
-                          </div>
-                          <h4 className="text-xs font-black uppercase tracking-widest text-white">
-                            Historique des observations ({selectedLogs.length})
-                          </h4>
-                        </div>
-
-                        {loadingLogs ? (
-                          <div className="py-6 text-center text-gray-400 italic">
-                            <Loader2 className="animate-spin text-brand-primary mx-auto mb-2" size={24} />
-                            Chargement de l'historique...
-                          </div>
-                        ) : selectedLogs.length === 0 ? (
-                          <div className="bg-white/5 p-8 rounded-[2rem] border border-dashed border-white/10 text-center animate-pulse">
-                            <p className="text-xs text-gray-400 italic">
-                              Aucune observation n'a été enregistrée pour le moment.
+                            <p className="text-[10px] font-bold mt-1 text-gray-400 uppercase font-mono italic">
+                              {p.phone} • {p.weeksPregnant} Semaines • ID: {p.id.slice(0, 8)}
                             </p>
                           </div>
-                        ) : (
-                          <div className="space-y-4 max-h-[350px] overflow-y-auto pr-1">
-                            {selectedLogs.map((log) => (
-                              <div
-                                key={log.id}
-                                className="bg-white/5 p-5 rounded-[2rem] border border-white/5 space-y-4 relative group hover:border-white/10 transition-colors"
-                              >
-                                {/* Delete Observation */}
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteLog(log.id)}
-                                  className="absolute top-4 right-4 p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl opacity-0 group-hover:opacity-100 transition-all border border-red-500/10"
-                                >
-                                  <Trash2 size={12} />
-                                </button>
-
-                                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 mb-2 text-left font-sans">
-                                  <span className="text-[10px] font-bold text-gray-400 font-mono">
-                                    {new Date(log.date).toLocaleString()}
-                                  </span>
-                                  <span
-                                    className={`text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest self-start ${
-                                      log.status === "critical"
-                                        ? "bg-red-500 text-white"
-                                        : log.status === "warning"
-                                          ? "bg-yellow-400 text-gray-900"
-                                          : "bg-green-500 text-white"
-                                    }`}
-                                  >
-                                    {log.status === "stable"
-                                      ? "Normal"
-                                      : log.status === "warning"
-                                        ? "Vigilance"
-                                        : "Urgence"}
-                                  </span>
-                                </div>
-
-                                {log.symptoms && log.symptoms.length > 0 && (
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {log.symptoms.map((symp) => (
-                                      <span
-                                        key={symp}
-                                        className="bg-white/10 px-3 py-1 rounded-lg text-[9px] font-bold text-gray-300 border border-white/5 uppercase tracking-widest"
-                                      >
-                                        {symp}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-
-                                <div className="bg-gray-950/50 p-4 rounded-xl border border-white/5 text-left">
-                                  <div className="grid grid-cols-2 gap-4 mb-2 border-b border-white/5 pb-2 text-[10px]">
-                                    <span className="text-gray-400">
-                                      Poids:{" "}
-                                      <strong className="text-white font-black">
-                                        {log.weight ? `${log.weight} kg` : "—"}
-                                      </strong>
-                                    </span>
-                                    <span className="text-gray-400">
-                                      Tension:{" "}
-                                      <strong className="text-white font-black">
-                                        {log.bloodPressure || "—"}
-                                      </strong>
-                                    </span>
-                                  </div>
-                                  <p className="text-xs text-gray-300 leading-relaxed italic">
-                                    {log.notes || "Aucun détail d'observation supplémentaire."}
-                                  </p>
-                                </div>
-                              </div>
-                            ))}
+                          <div className="flex items-center gap-2">
+                             <button
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 handleDeletePatient(p.id);
+                               }}
+                               className="p-2.5 bg-red-500/10 text-red-500 rounded-xl transition-all hover:bg-red-500/20 shadow-sm border border-red-500/10"
+                               title="Supprimer la patiente"
+                             >
+                               <Trash2 size={14} />
+                             </button>
+                             <div className={`transition-transform duration-300 ${isSelected ? "rotate-180 text-brand-primary" : "text-gray-500"}`}>
+                               <ChevronDown size={20} />
+                             </div>
                           </div>
+                        </div>
+
+                        {/* Expanded Details Area */}
+                        {isSelected && (
+                          <motion.div 
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            className="border-t border-white/5 bg-gray-950/30 overflow-hidden"
+                          >
+                             <div className="p-6 space-y-8 animate-in fade-in slide-in-from-top-4 duration-500">
+                                {/* Actions & QR */}
+                                <div className="flex flex-wrap gap-2 justify-between items-center">
+                                   <div className="flex gap-2">
+                                      <button
+                                        onClick={() => setIsEditingPatient(!isEditingPatient)}
+                                        className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${isEditingPatient ? "bg-brand-primary text-gray-950 border-brand-primary" : "bg-white/5 border-white/10 text-white hover:bg-white/10"}`}
+                                      >
+                                        {isEditingPatient ? "Annuler Edition" : "Modifier Profil"}
+                                      </button>
+                                      <button
+                                        onClick={() => setShowQR(true)}
+                                        className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest text-white transition-all flex items-center gap-2"
+                                      >
+                                        <QrCode size={12} />
+                                        Fiche QR
+                                      </button>
+                                   </div>
+                                   <div className="px-3 py-1 bg-brand-primary/10 rounded-lg text-[9px] font-black text-brand-primary uppercase font-mono">
+                                      Status: {patStatus.toUpperCase()}
+                                   </div>
+                                </div>
+
+                                {isEditingPatient ? (
+                                    /* Inline Edit Form */
+                                    <form onSubmit={handleSavePatientProfile} className="space-y-6 bg-white/5 p-6 rounded-2xl border border-white/5 text-left font-sans">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="space-y-1.5">
+                                                <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Nom Complet</label>
+                                                <input type="text" value={editPatName} onChange={(e) => setEditPatName(e.target.value)} className="w-full bg-gray-950 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-brand-primary" required />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Téléphone</label>
+                                                <input type="text" value={editPatPhone} onChange={(e) => setEditPatPhone(e.target.value)} className="w-full bg-gray-950 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-brand-primary" required />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">SA</label>
+                                                <input type="number" value={editPatWeeks} onChange={(e) => setEditPatWeeks(Number(e.target.value))} className="w-full bg-gray-950 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-brand-primary" required />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-[9px] font-black uppercase text-gray-400 tracking-widest">Hôpital</label>
+                                                <select value={editPatHospital} onChange={(e) => setEditPatHospital(e.target.value)} className="w-full bg-gray-950 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-brand-primary">
+                                                    <option value="">Sélectionnez un centre...</option>
+                                                    {hospitals.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <button type="submit" className="w-full py-3 bg-brand-primary text-gray-950 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-primary/90">Mettre à jour</button>
+                                    </form>
+                                ) : (
+                                    <>
+                                        {/* Summary Stats */}
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-left">
+                                            <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                                                <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Semaines</span>
+                                                <p className="text-xl font-bold text-white mt-1">{p.weeksPregnant}</p>
+                                            </div>
+                                            <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                                                <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Tension</span>
+                                                <p className="text-xl font-bold text-white mt-1">{p.bloodPressure || "—"}</p>
+                                            </div>
+                                            <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                                                <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Poids</span>
+                                                <p className="text-xl font-bold text-white mt-1">{p.weight} kg</p>
+                                            </div>
+                                            <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                                                <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">DPA</span>
+                                                <p className="text-sm font-bold text-brand-primary mt-2 font-mono">{p.dueDate ? new Date(p.dueDate).toLocaleDateString() : "—"}</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Medical Center info */}
+                                        {hospitals.find(h => h.id === p.assignedHospitalId) && (
+                                            <div className="bg-brand-primary/5 p-5 rounded-2xl border border-brand-primary/10 flex items-center justify-between text-left">
+                                                <div>
+                                                    <h5 className="text-[8px] font-black text-brand-primary uppercase tracking-widest mb-1">Centre Assigné</h5>
+                                                    <p className="text-sm font-black text-white uppercase">{hospitals.find(h => h.id === p.assignedHospitalId)?.name}</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-[8px] text-gray-400 uppercase font-bold tracking-widest">Contact</p>
+                                                    <p className="text-[10px] text-white font-bold">{hospitals.find(h => h.id === p.assignedHospitalId)?.phone}</p>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Inline Log Creation */}
+                                        <div className="bg-white/5 p-6 rounded-[2rem] border border-white/10 space-y-6">
+                                            <div className="flex items-center gap-3 text-left">
+                                              <div className="w-8 h-8 bg-brand-primary/20 rounded-xl flex items-center justify-center text-brand-primary">
+                                                <Stethoscope size={16} />
+                                              </div>
+                                              <h4 className="text-[10px] font-black uppercase text-brand-primary tracking-widest">Enregistrer un nouveau bilan</h4>
+                                            </div>
+                                            <form onSubmit={handleCreateCheckupLog} className="space-y-4">
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                    <div className="space-y-1 text-left">
+                                                        <label className="text-[8px] font-black text-gray-400 uppercase">Poids (kg)</label>
+                                                        <input type="number" step="0.1" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} className="w-full bg-gray-950 border border-white/5 rounded-xl px-4 py-2.5 text-xs text-white focus:border-brand-primary outline-none" />
+                                                    </div>
+                                                    <div className="space-y-1 text-left">
+                                                        <label className="text-[8px] font-black text-gray-400 uppercase">Tension</label>
+                                                        <input type="text" value={newBP} onChange={(e) => setNewBP(e.target.value)} className="w-full bg-gray-950 border border-white/5 rounded-xl px-4 py-2.5 text-xs text-white focus:border-brand-primary outline-none font-mono" />
+                                                    </div>
+                                                    <div className="space-y-1 text-left">
+                                                        <label className="text-[8px] font-black text-gray-400 uppercase">Statut</label>
+                                                        <select value={newStatus} onChange={(e) => setNewStatus(e.target.value as HealthStatus)} className="w-full bg-gray-950 border border-white/5 rounded-xl px-4 py-2.5 text-xs text-white focus:border-brand-primary outline-none">
+                                                            <option value="stable">Stable</option>
+                                                            <option value="warning">Vigilance</option>
+                                                            <option value="critical">Critique</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-1 text-left">
+                                                    <label className="text-[8px] font-black text-gray-400 uppercase">Symptômes & Notes</label>
+                                                    <textarea rows={2} value={newNotes} onChange={(e) => setNewNotes(e.target.value)} className="w-full bg-gray-950 border border-white/5 rounded-xl px-4 py-3 text-xs text-white focus:border-brand-primary outline-none" placeholder="Observations cliniques..." />
+                                                </div>
+                                                <button type="submit" disabled={submittingLog} className="w-full bg-brand-primary text-gray-950 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50">
+                                                    {submittingLog ? "Sauvegarde..." : "Valider le bilan"}
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </>
+                                )}
+                             </div>
+                          </motion.div>
                         )}
                       </div>
-                    </>
-                  )}
+                    );
+                  })}
                 </div>
-              </div>
-            )}
-            {/* End of Grid */}
+              )}
+            </div>
           </div>
         </>
       )}
