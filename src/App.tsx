@@ -621,10 +621,14 @@ export default function App() {
       let p: any = null;
       if (!snap.empty) {
         p = snap.docs[0].data();
+        p.id = snap.docs[0].id;
       } else {
         // Fallback to legacy/direct doc lookup if needed
         const profileSnap = await getDoc(doc(db, "users", uid));
-        if (profileSnap.exists()) p = profileSnap.data();
+        if (profileSnap.exists()) {
+          p = profileSnap.data();
+          p.id = profileSnap.id;
+        }
       }
 
       if (p) {
@@ -1307,10 +1311,12 @@ function Login({
             uid: cred.user.uid,
             updatedAt: serverTimestamp()
           }, { merge: true });
+          window.location.reload();
           return;
         } else {
           try {
             await emailLogin(trimmedEmail, trimmedPassword);
+            window.location.reload();
             return;
           } catch (e) {
              throw new Error("Identifiants administrateur incorrects.");
@@ -1319,24 +1325,27 @@ function Login({
       } else if (sessionType === "hospital") {
         const q = query(
           collection(db, "users"),
-          where("role", "==", "hospital"),
-          where("email", "==", trimmedEmail),
-          where("password", "==", trimmedPassword),
-          limit(1)
+          where("role", "==", "hospital")
         );
         const snap = await getDocs(q);
-        if (!snap.empty) {
-          const staffDoc = snap.docs[0];
+        const staffDoc = snap.docs.find(d => 
+          d.data().email?.toLowerCase() === trimmedEmail.toLowerCase() && 
+          d.data().password === trimmedPassword
+        );
+
+        if (staffDoc) {
           const cred = await anonymousLogin();
           // Link UID
           await updateDoc(doc(db, "users", staffDoc.id), {
             uid: cred.user.uid,
             updatedAt: serverTimestamp()
           });
+          window.location.reload();
           return;
         } else {
           try {
              await emailLogin(trimmedEmail, trimmedPassword);
+             window.location.reload();
              return;
           } catch (e) {
              throw new Error("Identifiants hospitaliers incorrects.");
