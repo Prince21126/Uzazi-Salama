@@ -18,6 +18,12 @@ export interface Patient {
   waterGoal?: number; // Daily goal in ml
   waterIntakeToday?: number; // Current intake today in ml
   waterTodayDate?: string; // Date of the current tracker e.g. YYYY-MM-DD
+  prescriptions?: {
+    id: string;
+    date: string;
+    notes: string;
+    doctorName?: string;
+  }[];
 }
 
 export interface CheckupLog {

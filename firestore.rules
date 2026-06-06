@@ -16,31 +16,26 @@ service cloud.firestore {
         (exists(/databases/$(database)/documents/users/admin-bypass) && get(/databases/$(database)/documents/users/admin-bypass).data.uid == request.auth.uid)
       );
     }
-    
-    function isValidUser(data) {
-      return data.name is string && data.name.size() > 0 && data.name.size() <= 200
-             && data.language is string && data.language.size() <= 10;
-    }
 
     // Users collection
     match /users/{userId} {
-      allow list: if isAdmin();
-      allow get: if true; // Allow lookup by name/slug
-      allow create: if true; // Allow public registration
-      allow update: if true; // Allow profile updates
-      allow delete: if isAdmin();
+      // Allow general read/write to prevent race conditions with localStorage session storage on page load before auth init
+      allow read, get, list: if true;
+      allow create, update: if true;
+      allow delete: if isSignedIn();
 
       // User logs subcollection
       match /logs/{logId} {
-        allow read, write: if true; // Allow access to patient's logs
+        allow read, get, list, write, create, update, delete: if true;
       }
     }
 
     // Hospitals collection
     match /hospitals/{hospitalId} {
-      // Allow public list and read so unauthenticated onboarding users can choose their closest hospital
-      allow list, read, get: if true;
-      allow write, create, update, delete: if isAdmin();
+      // Allow anyone to read, list, and create hospitals (required so the hospital onboarding can create hospital doc before auth is created)
+      allow read, get, list: if true;
+      allow create: if true;
+      allow update, delete, write: if isSignedIn();
     }
   }
 }

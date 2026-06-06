@@ -8,18 +8,186 @@
   --color-brand-primary: #52B788; /* Slightly lighter green for visibility in dark mode */
   --color-brand-secondary: #081C15; /* Very dark green */
   --color-brand-accent: #E76F51; /* Terracotta */
-  --color-app-bg: #0B090A; /* Near Black */
+}
+
+/* Custom CSS variables for theme switching */
+:root {
+  --app-bg: #0B090A;
+  --theme-text-main: #F5F3F4;
+  --theme-text-muted: #9CA3AF;
+  --header-bg: rgba(17, 24, 39, 0.8);
+  --header-border: rgba(255, 255, 255, 0.05);
+}
+
+:root.light {
+  --app-bg: #ECEFEA; /* Light-reflecting mint-grey background optimized for outdoor highlands */
+  --theme-text-main: #132A13; /* Deep forest charcoal green for extreme legibility */
+  --theme-text-muted: #4F5E54; /* Readable matte green-grey */
+  --header-bg: rgba(255, 255, 255, 0.85);
+  --header-border: rgba(82, 183, 136, 0.15);
 }
 
 body {
-  background-color: var(--color-app-bg);
-  color: #F5F3F4;
+  background-color: var(--app-bg);
+  color: var(--theme-text-main);
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
-.markdown-body h1 { @apply text-2xl font-bold mb-4 font-display text-white; }
-.markdown-body p { @apply mb-2 text-gray-400; }
+.markdown-body h1 { 
+  @apply text-2xl font-bold mb-4 font-display text-white; 
+}
+:root.light .markdown-body h1 {
+  color: #132A13 !important;
+}
+
+.markdown-body p { 
+  @apply mb-2 text-gray-400; 
+}
+:root.light .markdown-body p {
+  color: #4F5E54 !important;
+}
 
 .shadow-geometric {
   shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
 }
 
+/* --- LIGHT THEME COMPATIBILITY OVERRIDES --- */
+:root.light body,
+:root.light main,
+:root.light .bg-app-bg {
+  background-color: #ECEFEA !important;
+  color: #132A13 !important;
+}
+
+/* Header style shift */
+:root.light header {
+  background-color: var(--header-bg) !important;
+  border-color: var(--header-border) !important;
+}
+:root.light header h1 {
+  color: #132A13 !important;
+}
+:root.light header p,
+:root.light header span, 
+:root.light header button,
+:root.light header .text-white {
+  color: #132A13 !important;
+}
+
+/* Base structural cards targeting .bg-gray-900 models */
+:root.light .bg-gray-900,
+:root.light .bg-gradient-to-br.from-gray-900.to-gray-800,
+:root.light .bg-gradient-to-br.from-gray-900.via-gray-900.to-gray-900,
+:root.light .bg-gradient-to-br.from-emerald-950\/20.to-teal-950\/10 {
+  background-color: #FFFFFF !important;
+  background-image: none !important;
+  color: #132A13 !important;
+  border-color: rgba(62, 80, 70, 0.1) !important;
+  box-shadow: 0 4px 12px rgba(19, 42, 19, 0.05) !important;
+}
+
+/* Sub-card tags like white/5 or white/10 overlays */
+:root.light .bg-white\/5,
+:root.light .bg-white\/10,
+:root.light .bg-white\/5\/20 {
+  background-color: #F3F6F4 !important;
+  color: #132A13 !important;
+  border-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.light .hover\:bg-white\/10:hover,
+:root.light .hover\:bg-white\/5:hover {
+  background-color: #E2E8E4 !important;
+}
+
+/* Custom text brightness adjustments inside white/light blocks */
+:root.light .text-white,
+:root.light .text-gray-100,
+:root.light .text-gray-200,
+:root.light .text-gray-300 {
+  color: #132A13 !important;
+}
+
+:root.light .text-gray-400,
+:root.light .text-gray-500,
+:root.light .text-white\/60,
+:root.light .text-white\/70,
+:root.light .text-gray-400\/80 {
+  color: #4F5E54 !important;
+}
+
+/* Explicit border tweaks */
+:root.light .border-white\/5,
+:root.light .border-white\/10,
+:root.light .border-white\/20 {
+  border-color: rgba(62, 80, 70, 0.1) !important;
+}
+
+/* Clinical charts tick labels and grid vectors */
+:root.light .stroke-white\/5 {
+  stroke: rgba(62, 80, 70, 0.08) !important;
+}
+:root.light .fill-gray-500 {
+  fill: #4F5E54 !important;
+}
+:root.light circle.fill-black {
+  fill: #FFFFFF !important;
+}
+:root.light rect.fill-blue-500 {
+  fill: #1E40AF !important; /* solid navy blue for contrast */
+}
+:root.light text.fill-black {
+  fill: #FFFFFF !important;
+}
+
+/* Extra forms details and inputs adjustments */
+:root.light input,
+:root.light select,
+:root.light textarea {
+  background-color: #FFFFFF !important;
+  color: #132A13 !important;
+  border-color: rgba(82, 183, 136, 0.3) !important;
+}
+:root.light input::placeholder,
+:root.light textarea::placeholder {
+  color: #8C9A90 !important;
+}
+
+/* Language and custom select hover backgrounds */
+:root.light .bg-white\/10.border.border-white\/10 {
+  background-color: #FFFFFF !important;
+  border-color: rgba(82, 183, 136, 0.2) !important;
+}
+
+/* Highlight badge adjustments to remain visible as secondary colors */
+:root.light .bg-sky-500\/10 {
+  background-color: rgba(14, 165, 233, 0.12) !important;
+}
+:root.light .bg-purple-400\/10,
+:root.light .bg-purple-500\/10 {
+  background-color: rgba(168, 85, 247, 0.12) !important;
+}
+:root.light .bg-amber-400\/10,
+:root.light .bg-amber-500\/10 {
+  background-color: rgba(245, 158, 11, 0.12) !important;
+}
+:root.light .bg-emerald-500\/10,
+:root.light .bg-emerald-500\/20 {
+  background-color: rgba(16, 185, 129, 0.12) !important;
+}
+:root.light .bg-red-500\/10,
+:root.light .bg-red-400\/10 {
+  background-color: rgba(239, 68, 68, 0.12) !important;
+}
+
+/* Modals overlays and backdrops so they darken correctly */
+:root.light .bg-black\/80 {
+  background-color: rgba(0, 0, 0, 0.7) !important;
+}
+:root.light .bg-black\/80 .bg-gray-900,
+:root.light .bg-black\/80 .bg-gradient-to-br {
+  background-color: #FFFFFF !important;
+}
+:root.light .bg-black\/80 .text-white {
+  color: #132A13 !important;
+}

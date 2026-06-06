@@ -4,6 +4,8 @@ import {
   signInWithPopup, 
   GoogleAuthProvider,
   signInAnonymously,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signOut, 
   User 
 } from 'firebase/auth';
@@ -14,6 +16,8 @@ interface AuthContextType {
   loading: boolean;
   googleLogin: () => Promise<void>;
   anonymousLogin: () => Promise<void>;
+  emailLogin: (email: string, password: string) => Promise<User | null>;
+  emailSignUp: (email: string, password: string) => Promise<User | null>;
   logout: () => Promise<void>;
 }
 
@@ -50,12 +54,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const emailLogin = async (email: string, password: string) => {
+    try {
+      const credential = await signInWithEmailAndPassword(auth, email, password);
+      return credential.user;
+    } catch (error: any) {
+      console.error('Email login error:', error);
+      throw error;
+    }
+  };
+
+  const emailSignUp = async (email: string, password: string) => {
+    try {
+      const credential = await createUserWithEmailAndPassword(auth, email, password);
+      return credential.user;
+    } catch (error: any) {
+      console.error('Email signup error:', error);
+      throw error;
+    }
+  };
+
   const logout = async () => {
     await signOut(auth);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, googleLogin, anonymousLogin, logout }}>
+    <AuthContext.Provider value={{ user, loading, googleLogin, anonymousLogin, emailLogin, emailSignUp, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -24,6 +24,20 @@
       },
       "required": ["name", "language"]
     },
+    "Hospital": {
+      "title": "Hospital / Clinic",
+      "description": "Healthcare facility details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "location": { "type": "string" },
+        "phone": { "type": "string" },
+        "emergencyContact": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "location"]
+    },
     "CheckupLog": {
       "title": "Health Checkup Log",
       "description": "Daily symptoms and AI analysis results",
@@ -47,6 +61,10 @@
     "/users/{userId}/logs/{logId}": {
       "schema": "CheckupLog",
       "description": "Stores daily health logs for each user"
+    },
+    "/hospitals/{hospitalId}": {
+      "schema": "Hospital",
+      "description": "Stores healthcare facility profiles"
     }
   }
 }

@@ -144,7 +144,7 @@ export default function ClinicalCharts({ logs, language, initialWeight = 65 }: {
     }
 
     return (
-      <div className="bg-white/10/20 p-6 rounded-[2.5rem] border border-white/5 space-y-4">
+      <div className="bg-white/10 p-6 rounded-[2.5rem] border border-white/5 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-blue-500/10 text-blue-400 rounded-lg flex items-center justify-center">
@@ -316,7 +316,7 @@ export default function ClinicalCharts({ logs, language, initialWeight = 65 }: {
     const isHigh = latestSys >= 140 || latestDia >= 90;
 
     return (
-      <div className="bg-white/10/20 p-6 rounded-[2.5rem] border border-white/5 space-y-4">
+      <div className="bg-white/10 p-6 rounded-[2.5rem] border border-white/5 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-red-500/10 text-red-400 rounded-lg flex items-center justify-center">
